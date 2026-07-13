@@ -7,6 +7,7 @@ from typing import Any
 
 from PySide6.QtCore import QSettings
 
+from house_photo_mapper.domain.models.plan import PlanModel
 from house_photo_mapper.domain.models.project import ProjectModel
 
 
@@ -82,6 +83,41 @@ class PersistenceService:
         """
         project.path = new_path
         self.save_project(project)
+
+    def save_plan_model(self, plan: PlanModel, project_dir: Path) -> None:
+        """Save PlanModel to project_dir/plans.json atomically.
+
+        Args:
+            plan: PlanModel to save.
+            project_dir: Project directory containing plans.json.
+
+        Raises:
+            OSError: If write fails.
+        """
+        plan_path = project_dir / "plans.json"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Atomic write: write to .tmp then rename
+        tmp_path = plan_path.with_suffix(".tmp")
+        tmp_path.write_text(plan.model_dump_json(indent=2))
+        tmp_path.replace(plan_path)
+
+    def load_plan_model(self, project_dir: Path) -> PlanModel | None:
+        """Load PlanModel from project_dir/plans.json.
+
+        Args:
+            project_dir: Project directory containing plans.json.
+
+        Returns:
+            Validated PlanModel instance, or None if file doesn't exist.
+
+        Raises:
+            ValidationError: If JSON doesn't match PlanModel schema.
+        """
+        plan_path = project_dir / "plans.json"
+        if not plan_path.exists():
+            return None
+        return PlanModel.model_validate_json(plan_path.read_text())
 
     def get_recent_projects(self) -> list[str]:
         """Get list of recent project paths (max 10)."""
