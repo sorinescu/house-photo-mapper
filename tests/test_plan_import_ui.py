@@ -161,3 +161,97 @@ class TestProjectViewModelPlanVmProperty:
         mock_persistence = MagicMock()
         pvm = ProjectViewModel(mock_persistence)
         assert pvm.plan_vm is None
+
+
+class TestImportPlanIntegration:
+    """Integration tests: MainWindow menu action triggers VM import_plan."""
+
+    @pytest.fixture
+    def main_window(self, qapp):
+        """Create MainWindow with mock ViewModel for integration testing."""
+        from house_photo_mapper.presentation.views.main_window import MainWindow
+
+        mock_vm = MagicMock()
+        mock_persistence = MagicMock()
+        mock_persistence.load_window_geometry.return_value = None
+        mock_persistence.load_window_state.return_value = None
+        window = MainWindow(view_model=mock_vm, persistence=mock_persistence)
+        yield window, mock_vm
+        window.close()
+
+    def test_import_plan_action_exists_in_menu(self, main_window):
+        """Import Plan action exists in the File menu."""
+        window, _ = main_window
+        menubar = window.menuBar()
+        file_menu = None
+        for action in menubar.actions():
+            if action.text() == "&File":
+                file_menu = action.menu()
+                break
+        assert file_menu is not None, "File menu not found"
+
+        import_action = None
+        for action in file_menu.actions():
+            if action.text() == "Import &Plan...":
+                import_action = action
+                break
+        assert import_action is not None, "Import Plan action not found in File menu"
+
+    def test_import_plan_action_has_shortcut(self, main_window):
+        """Import Plan action has Ctrl+Shift+I shortcut."""
+        window, _ = main_window
+        menubar = window.menuBar()
+        file_menu = None
+        for action in menubar.actions():
+            if action.text() == "&File":
+                file_menu = action.menu()
+                break
+
+        import_action = None
+        for action in file_menu.actions():
+            if action.text() == "Import &Plan...":
+                import_action = action
+                break
+
+        assert import_action is not None
+        shortcut = import_action.shortcut()
+        assert shortcut.toString() == "Ctrl+Shift+I"
+
+    def test_import_plan_action_triggers_vm_slot(self, main_window):
+        """Clicking Import Plan action triggers import_plan on VM."""
+        window, mock_vm = main_window
+        menubar = window.menuBar()
+        file_menu = None
+        for action in menubar.actions():
+            if action.text() == "&File":
+                file_menu = action.menu()
+                break
+
+        import_action = None
+        for action in file_menu.actions():
+            if action.text() == "Import &Plan...":
+                import_action = action
+                break
+
+        assert import_action is not None
+        import_action.trigger()
+        mock_vm.import_plan.assert_called_once()
+
+    def test_import_plan_action_always_enabled(self, main_window):
+        """Import Plan action is always enabled (no project state dependency)."""
+        window, _ = main_window
+        menubar = window.menuBar()
+        file_menu = None
+        for action in menubar.actions():
+            if action.text() == "&File":
+                file_menu = action.menu()
+                break
+
+        import_action = None
+        for action in file_menu.actions():
+            if action.text() == "Import &Plan...":
+                import_action = action
+                break
+
+        assert import_action is not None
+        assert import_action.isEnabled()
