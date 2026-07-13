@@ -310,20 +310,224 @@ class TestPlanSidebarIntegration:
 
     def test_sidebar_viewmodel_page_click_switches_page(self, qapp):
         """Test clicking sidebar page emits itemClicked -> set_page."""
-        # This test will be completed after PlanSidebar and PlanViewModel integration
-        pass
+        from PySide6.QtCore import QModelIndex
+        from PySide6.QtGui import QPixmap, QColor
+        from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+        from house_photo_mapper.domain.models.plan import PlanModel, PageModel
+        
+        # Create sidebar with 3 pages
+        sidebar = PlanSidebar()
+        pixmap = QPixmap(200, 200)
+        pixmap.fill(QColor("red"))
+        sidebar.add_page(0, pixmap, floor=0)
+        sidebar.add_page(1, pixmap, floor=1)
+        sidebar.add_page(2, pixmap, floor=2)
+        
+        # Create ViewModel with mock plan model
+        vm = PlanViewModel()
+        pages = [
+            PageModel(source_path="test.pdf", page_index=0, order=0, floor=0),
+            PageModel(source_path="test.pdf", page_index=1, order=1, floor=1),
+            PageModel(source_path="test.pdf", page_index=2, order=2, floor=2),
+        ]
+        model = PlanModel(pages=pages, active_page_index=0)
+        vm.set_plan_model(model)
+        
+        # Connect sidebar item click to ViewModel
+        sidebar.itemClicked.connect(lambda item: vm.on_sidebar_page_clicked(
+            item.data(Qt.ItemDataRole.UserRole)["page_num"]
+        ))
+        
+        # Track page changes
+        page_changes = []
+        vm.page_changed.connect(lambda idx: page_changes.append(idx))
+        
+        # Click on page 2 (index 1)
+        item = sidebar.item(1)
+        sidebar.setCurrentItem(item)
+        sidebar.itemClicked.emit(item)
+        
+        # Verify page changed
+        assert len(page_changes) == 1
+        assert page_changes[0] == 1
+        assert vm.current_page == 1
 
     def test_sidebar_viewmodel_reorder_updates_model(self, qapp):
         """Test sidebar reorder -> PlanViewModel.on_sidebar_order_changed -> PlanModel updated."""
-        pass
+        from PySide6.QtGui import QPixmap, QColor
+        from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+        from house_photo_mapper.domain.models.plan import PlanModel, PageModel
+        
+        # Create sidebar with 3 pages
+        sidebar = PlanSidebar()
+        pixmap = QPixmap(200, 200)
+        pixmap.fill(QColor("red"))
+        sidebar.add_page(0, pixmap, floor=0)
+        sidebar.add_page(1, pixmap, floor=1)
+        sidebar.add_page(2, pixmap, floor=2)
+        
+        # Create ViewModel with mock plan model
+        vm = PlanViewModel()
+        pages = [
+            PageModel(source_path="test.pdf", page_index=0, order=0, floor=0),
+            PageModel(source_path="test.pdf", page_index=1, order=1, floor=1),
+            PageModel(source_path="test.pdf", page_index=2, order=2, floor=2),
+        ]
+        model = PlanModel(pages=pages, active_page_index=0)
+        vm.set_plan_model(model)
+        
+        # Connect sidebar order change to ViewModel
+        sidebar.order_changed.connect(vm.on_sidebar_order_changed)
+        
+        # Track pages reordered signal
+        pages_reordered_received = []
+        vm.pages_reordered.connect(lambda pages: pages_reordered_received.append(pages))
+        
+        # Simulate drag-reorder: move page 2 to position 0
+        item2 = sidebar.takeItem(2)
+        sidebar.insertItem(0, item2)
+        
+        # Emit rowsMoved signal
+        model_qt = sidebar.model()
+        model_qt.rowsMoved.emit(None, 2, 2, None, 0)
+        
+        # Verify ViewModel updated model order
+        sorted_pages = vm.get_sorted_pages()
+        assert sorted_pages[0].page_index == 2  # Moved to front
+        assert sorted_pages[1].page_index == 0
+        assert sorted_pages[2].page_index == 1
+        
+        # Verify order field updated
+        assert sorted_pages[0].order == 0
+        assert sorted_pages[1].order == 1
+        assert sorted_pages[2].order == 2
+        
+        # Verify pages_reordered signal emitted
+        assert len(pages_reordered_received) == 1
 
     def test_sidebar_viewmodel_floor_change_updates_model(self, qapp):
         """Test floor combo change -> PlanViewModel.on_sidebar_floor_changed -> PageModel.floor updated."""
-        pass
+        from PySide6.QtGui import QPixmap, QColor
+        from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+        from house_photo_mapper.domain.models.plan import PlanModel, PageModel
+        
+        # Create sidebar with 3 pages
+        sidebar = PlanSidebar()
+        pixmap = QPixmap(200, 200)
+        pixmap.fill(QColor("red"))
+        sidebar.add_page(0, pixmap, floor=0)
+        sidebar.add_page(1, pixmap, floor=1)
+        sidebar.add_page(2, pixmap, floor=2)
+        
+        # Create ViewModel with mock plan model
+        vm = PlanViewModel()
+        pages = [
+            PageModel(source_path="test.pdf", page_index=0, order=0, floor=0),
+            PageModel(source_path="test.pdf", page_index=1, order=1, floor=1),
+            PageModel(source_path="test.pdf", page_index=2, order=2, floor=2),
+        ]
+        model = PlanModel(pages=pages, active_page_index=0)
+        vm.set_plan_model(model)
+        
+        # Connect sidebar floor change to ViewModel
+        sidebar.floor_changed.connect(vm.on_sidebar_floor_changed)
+        
+        # Track floor changed signal
+        floor_changes = []
+        vm.floor_changed.connect(lambda page_num, floor: floor_changes.append((page_num, floor)))
+        
+        # Change floor on page 0 from 0 to 5
+        item = sidebar.item(0)
+        combo = sidebar.itemWidget(item)
+        combo.setCurrentIndex(7)  # Index 7 = Floor 5 (7-2=5)
+        
+        # Verify ViewModel updated model floor
+        sorted_pages = vm.get_sorted_pages()
+        assert sorted_pages[0].floor == 5
+        
+        # Verify floor_changed signal emitted
+        assert len(floor_changes) == 1
+        assert floor_changes[0] == (0, 5)  # page_num=0, floor=5
 
     def test_viewmodel_page_changed_highlights_sidebar(self, qapp):
         """Test PlanViewModel.page_changed -> PlanSidebar.set_active_page."""
-        pass
+        from PySide6.QtGui import QPixmap, QColor
+        from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+        from house_photo_mapper.domain.models.plan import PlanModel, PageModel
+        
+        # Create sidebar with 3 pages
+        sidebar = PlanSidebar()
+        pixmap = QPixmap(200, 200)
+        pixmap.fill(QColor("red"))
+        sidebar.add_page(0, pixmap, floor=0)
+        sidebar.add_page(1, pixmap, floor=1)
+        sidebar.add_page(2, pixmap, floor=2)
+        
+        # Create ViewModel with mock plan model
+        vm = PlanViewModel()
+        pages = [
+            PageModel(source_path="test.pdf", page_index=0, order=0, floor=0),
+            PageModel(source_path="test.pdf", page_index=1, order=1, floor=1),
+            PageModel(source_path="test.pdf", page_index=2, order=2, floor=2),
+        ]
+        model = PlanModel(pages=pages, active_page_index=0)
+        vm.set_plan_model(model)
+        
+        # Connect ViewModel page_changed to sidebar set_active_page
+        vm.page_changed.connect(sidebar.set_active_page)
+        
+        # Set page to 2
+        vm.set_page(2)
+        
+        # Verify sidebar highlights page 2
+        selected = sidebar.selectedItems()
+        assert len(selected) == 1
+        data = selected[0].data(Qt.ItemDataRole.UserRole)
+        assert data["page_num"] == 2
+
+    def test_sidebar_viewmodel_integration(self, qapp):
+        """Test full integration: sidebar click -> ViewModel -> model updated -> sidebar highlight."""
+        from PySide6.QtGui import QPixmap, QColor
+        from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+        from house_photo_mapper.domain.models.plan import PlanModel, PageModel
+        
+        # Create sidebar with 3 pages
+        sidebar = PlanSidebar()
+        pixmap = QPixmap(200, 200)
+        pixmap.fill(QColor("red"))
+        sidebar.add_page(0, pixmap, floor=0)
+        sidebar.add_page(1, pixmap, floor=1)
+        sidebar.add_page(2, pixmap, floor=2)
+        
+        # Create ViewModel with mock plan model
+        vm = PlanViewModel()
+        pages = [
+            PageModel(source_path="test.pdf", page_index=0, order=0, floor=0),
+            PageModel(source_path="test.pdf", page_index=1, order=1, floor=1),
+            PageModel(source_path="test.pdf", page_index=2, order=2, floor=2),
+        ]
+        model = PlanModel(pages=pages, active_page_index=0)
+        vm.set_plan_model(model)
+        
+        # Connect signals
+        sidebar.itemClicked.connect(lambda item: vm.on_sidebar_page_clicked(
+            item.data(Qt.ItemDataRole.UserRole)["page_num"]
+        ))
+        vm.page_changed.connect(sidebar.set_active_page)
+        
+        # Click on page 1
+        item = sidebar.item(1)
+        sidebar.setCurrentItem(item)
+        sidebar.itemClicked.emit(item)
+        
+        # Verify sidebar highlights page 1
+        selected = sidebar.selectedItems()
+        assert len(selected) == 1
+        data = selected[0].data(Qt.ItemDataRole.UserRole)
+        assert data["page_num"] == 1
+        
+        # Verify ViewModel page changed
+        assert vm.current_page == 1
 
 
 if __name__ == "__main__":
