@@ -1,0 +1,219 @@
+"""Tests for CalibrationService, CalibrationViewModel, and CalibrationDialog."""
+
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+from PySide6.QtCore import Qt, QPointF
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QApplication, QDialogButtonBox
+
+# Ensure src is on path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from house_photo_mapper.domain.models.plan import CalibrationModel
+from house_photo_mapper.domain.services.calibration import CalibrationService
+
+
+# =============================================================================
+# Task 1 Tests: CalibrationService
+# =============================================================================
+
+
+class TestCalibrationService:
+    """Tests for CalibrationService calibrate() and verify() methods."""
+
+    def test_calibrate_basic(self, qapp):
+        """Test calibrate computes correct ppm from two points and known distance."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)  # 100 pixels apart
+        known_m = 1.0  # 1 meter
+
+        cal = CalibrationService.calibrate(p1, p2, known_m)
+
+        assert cal.pixels_per_meter == pytest.approx(100.0)
+        assert cal.verified is False
+        assert cal.reference_distance_m == pytest.approx(1.0)
+        assert cal.reference_point1 == [0.0, 0.0]
+        assert cal.reference_point2 == [100.0, 0.0]
+
+    def test_calibrate_diagonal_distance(self, qapp):
+        """Test calibrate uses Euclidean distance (hypot)."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(3.0, 4.0)  # 5 pixels (3-4-5 triangle)
+        known_m = 1.0
+
+        cal = CalibrationService.calibrate(p1, p2, known_m)
+
+        assert cal.pixels_per_meter == pytest.approx(5.0)
+
+    def test_calibrate_different_units(self, qapp):
+        """Test calibrate with different known distances."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(200.0, 0.0)
+        known_m = 2.0  # 2 meters
+
+        cal = CalibrationService.calibrate(p1, p2, known_m)
+
+        assert cal.pixels_per_meter == pytest.approx(100.0)
+
+    def test_calibrate_zero_distance_raises(self, qapp):
+        """Test calibrate raises ValueError for zero known distance."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+
+        with pytest.raises(ValueError, match="known_distance_m must be > 0"):
+            CalibrationService.calibrate(p1, p2, 0.0)
+
+    def test_calibrate_negative_distance_raises(self, qapp):
+        """Test calibrate raises ValueError for negative known distance."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+
+        with pytest.raises(ValueError, match="known_distance_m must be > 0"):
+            CalibrationService.calibrate(p1, p2, -1.0)
+
+    def test_calibrate_identical_points_raises(self, qapp):
+        """Test calibrate raises ValueError when points are identical (zero pixel distance)."""
+        p1 = QPointF(50.0, 50.0)
+        p2 = QPointF(50.0, 50.0)
+
+        with pytest.raises(ValueError, match="pixel distance must be > 0"):
+            CalibrationService.calibrate(p1, p2, 1.0)
+
+    def test_verify_passes_within_tolerance(self, qapp):
+        """Test verify passes when error is within 2% tolerance."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+        cal = CalibrationService.calibrate(p1, p2, 1.0)
+
+        # Verification points: 101 pixels for 1.0m → 1.01m measured → 1% error
+        v1 = QPointF(200.0, 0.0)
+        v2 = QPointF(301.0, 0.0)
+
+        result = CalibrationService.verify(cal, v1, v2, 1.0)
+
+        assert result is True
+        assert cal.verified is True
+
+    def test_verify_passes_just_under_boundary(self, qapp):
+        """Test verify passes just under 2% error boundary (1.99%)."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+        cal = CalibrationService.calibrate(p1, p2, 1.0)
+
+        # 101.99 pixels → 1.0199m → 1.99% error (just under 2%)
+        v1 = QPointF(200.0, 0.0)
+        v2 = QPointF(301.99, 0.0)
+
+        result = CalibrationService.verify(cal, v1, v2, 1.0)
+
+        assert result is True
+        assert cal.verified is True
+
+    def test_verify_fails_above_tolerance(self, qapp):
+        """Test verify fails when error exceeds 2% tolerance."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+        cal = CalibrationService.calibrate(p1, p2, 1.0)
+
+        # 103 pixels for 1.0m → 1.03m measured → 3% error
+        v1 = QPointF(200.0, 0.0)
+        v2 = QPointF(303.0, 0.0)
+
+        result = CalibrationService.verify(cal, v1, v2, 1.0)
+
+        assert result is False
+        assert cal.verified is False
+
+    def test_verify_fails_at_2_1_percent(self, qapp):
+        """Test verify fails at 2.1% error (plan requirement)."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+        cal = CalibrationService.calibrate(p1, p2, 1.0)
+
+        # 102.1 pixels → 1.021m → 2.1% error
+        v1 = QPointF(200.0, 0.0)
+        v2 = QPointF(302.1, 0.0)
+
+        result = CalibrationService.verify(cal, v1, v2, 1.0)
+
+        assert result is False
+
+    def test_verify_passes_at_1_9_percent(self, qapp):
+        """Test verify passes at 1.9% error (plan requirement)."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+        cal = CalibrationService.calibrate(p1, p2, 1.0)
+
+        # 101.9 pixels → 1.019m → 1.9% error
+        v1 = QPointF(200.0, 0.0)
+        v2 = QPointF(301.9, 0.0)
+
+        result = CalibrationService.verify(cal, v1, v2, 1.0)
+
+        assert result is True
+
+    def test_verify_zero_known_distance_raises(self, qapp):
+        """Test verify raises ValueError for zero known distance."""
+        p1 = QPointF(0.0, 0.0)
+        p2 = QPointF(100.0, 0.0)
+        cal = CalibrationService.calibrate(p1, p2, 1.0)
+
+        v1 = QPointF(200.0, 0.0)
+        v2 = QPointF(300.0, 0.0)
+
+        with pytest.raises(ValueError, match="known_distance_m must be > 0"):
+            CalibrationService.verify(cal, v1, v2, 0.0)
+
+    def test_calibration_model_serialization(self, qapp):
+        """Test CalibrationModel serializes to JSON and back."""
+        cal = CalibrationModel(
+            pixels_per_meter=100.0,
+            verified=True,
+            reference_point1=[10.0, 20.0],
+            reference_point2=[110.0, 20.0],
+            reference_distance_m=1.0,
+        )
+
+        # Serialize
+        data = cal.model_dump(mode="json")
+        assert data["pixels_per_meter"] == 100.0
+        assert data["verified"] is True
+        assert data["reference_point1"] == [10.0, 20.0]
+
+        # Deserialize
+        cal2 = CalibrationModel.model_validate(data)
+        assert cal2.pixels_per_meter == 100.0
+        assert cal2.verified is True
+        assert cal2.reference_point1 == [10.0, 20.0]
+
+    def test_calibration_model_validates_ppm_positive(self, qapp):
+        """Test CalibrationModel rejects ppm <= 0."""
+        with pytest.raises(Exception):
+            CalibrationModel(
+                pixels_per_meter=0.0,
+                reference_point1=[0.0, 0.0],
+                reference_point2=[100.0, 0.0],
+                reference_distance_m=1.0,
+            )
+
+        with pytest.raises(Exception):
+            CalibrationModel(
+                pixels_per_meter=-1.0,
+                reference_point1=[0.0, 0.0],
+                reference_point2=[100.0, 0.0],
+                reference_distance_m=1.0,
+            )
+
+    def test_calibration_model_validates_extra_forbidden(self, qapp):
+        """Test CalibrationModel rejects extra fields."""
+        with pytest.raises(Exception):
+            CalibrationModel(
+                pixels_per_meter=100.0,
+                reference_point1=[0.0, 0.0],
+                reference_point2=[100.0, 0.0],
+                reference_distance_m=1.0,
+                bogus_field="should fail",
+            )
