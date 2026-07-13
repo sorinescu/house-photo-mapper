@@ -217,3 +217,210 @@ class TestCalibrationService:
                 reference_distance_m=1.0,
                 bogus_field="should fail",
             )
+
+
+# =============================================================================
+# Task 2 Tests: CalibrationViewModel and CalibrationDialog
+# =============================================================================
+
+
+class TestCalibrationViewModel:
+    """Tests for CalibrationViewModel wizard state machine."""
+
+    def test_vm_initial_state(self, qapp):
+        """Test ViewModel starts in spec step with no calibration."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        assert vm.step == CalibrationStep.SPEC
+        assert vm.calibration is None
+        assert vm.error_pct is None
+
+    def test_vm_set_known_distance_advances_to_point1(self, qapp):
+        """Test setting known distance advances to point1 step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0)
+        assert vm.step == CalibrationStep.POINT1
+        assert vm.known_distance_m == 1.0
+
+    def test_vm_rejects_zero_distance(self, qapp):
+        """Test setting zero distance stays on spec step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(0.0)
+        assert vm.step == CalibrationStep.SPEC
+
+    def test_vm_rejects_negative_distance(self, qapp):
+        """Test setting negative distance stays on spec step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(-1.0)
+        assert vm.step == CalibrationStep.SPEC
+
+    def test_vm_receive_point1_advances_to_point2(self, qapp):
+        """Test receiving first point advances to point2 step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0)
+        vm.receive_point(QPointF(0.0, 0.0))
+        assert vm.step == CalibrationStep.POINT2
+
+    def test_vm_receive_point2_advances_to_verify(self, qapp):
+        """Test receiving second point advances to verify step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0)
+        vm.receive_point(QPointF(0.0, 0.0))  # point1
+        vm.receive_point(QPointF(100.0, 0.0))  # point2
+        assert vm.step == CalibrationStep.VERIFY
+        assert vm.calibration is not None
+        assert vm.calibration.pixels_per_meter == pytest.approx(100.0)
+
+    def test_vm_verify_pass_advances_to_complete(self, qapp):
+        """Test successful verification advances to complete step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0)
+        vm.receive_point(QPointF(0.0, 0.0))
+        vm.receive_point(QPointF(100.0, 0.0))
+        # Verify with matching distance
+        vm.receive_point(QPointF(200.0, 0.0))
+        vm.receive_point(QPointF(300.0, 0.0))
+        vm.request_verification()
+
+        assert vm.step == CalibrationStep.COMPLETE
+        assert vm.calibration.verified is True
+        assert vm.error_pct == pytest.approx(0.0)
+
+    def test_vm_verify_fail_stays_on_verify(self, qapp):
+        """Test failed verification stays on verify step."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0)
+        vm.receive_point(QPointF(0.0, 0.0))
+        vm.receive_point(QPointF(100.0, 0.0))
+        # Verify with wrong distance (10% error)
+        vm.receive_point(QPointF(200.0, 0.0))
+        vm.receive_point(QPointF(310.0, 0.0))
+        vm.request_verification()
+
+        assert vm.step == CalibrationStep.VERIFY
+        assert vm.calibration.verified is False
+        assert vm.error_pct is not None
+        assert vm.error_pct > 2.0
+
+    def test_vm_accept_emits_calibration_ready(self, qapp):
+        """Test accept emits calibration_ready signal with CalibrationModel."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        emitted = []
+        vm.calibration_ready.connect(lambda cal: emitted.append(cal))
+
+        vm.set_known_distance(1.0)
+        vm.receive_point(QPointF(0.0, 0.0))
+        vm.receive_point(QPointF(100.0, 0.0))
+        vm.receive_point(QPointF(200.0, 0.0))
+        vm.receive_point(QPointF(300.0, 0.0))
+        vm.request_verification()
+        vm.accept()
+
+        assert len(emitted) == 1
+        assert emitted[0].verified is True
+
+    def test_vm_cancel_emits_cancelled(self, qapp):
+        """Test cancel emits cancelled signal."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import CalibrationViewModel
+
+        vm = CalibrationViewModel()
+        cancelled = []
+        vm.cancelled.connect(lambda: cancelled.append(True))
+
+        vm.cancel()
+
+        assert len(cancelled) == 1
+
+    def test_vm_unit_conversion_inches_to_meters(self, qapp):
+        """Test unit conversion from inches to meters."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import CalibrationViewModel
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(36.0, unit="inches")
+        assert vm.known_distance_m == pytest.approx(0.9144)
+
+    def test_vm_unit_conversion_feet_to_meters(self, qapp):
+        """Test unit conversion from feet to meters."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import CalibrationViewModel
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(3.0, unit="feet")
+        assert vm.known_distance_m == pytest.approx(0.9144)
+
+    def test_vm_unit_conversion_meters(self, qapp):
+        """Test no conversion for meters."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import CalibrationViewModel
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0, unit="meters")
+        assert vm.known_distance_m == pytest.approx(1.0)
+
+    def test_vm_step_changed_signal(self, qapp):
+        """Test step_changed signal emits on step transitions."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import (
+            CalibrationViewModel,
+            CalibrationStep,
+        )
+
+        vm = CalibrationViewModel()
+        steps = []
+        vm.step_changed.connect(lambda s: steps.append(s))
+
+        vm.set_known_distance(1.0)
+        assert steps == [CalibrationStep.POINT1]
+
+    def test_vm_points_captured(self, qapp):
+        """Test points are captured and stored during wizard."""
+        from house_photo_mapper.presentation.viewmodels.calibration_vm import CalibrationViewModel
+
+        vm = CalibrationViewModel()
+        vm.set_known_distance(1.0)
+        vm.receive_point(QPointF(10.0, 20.0))
+        vm.receive_point(QPointF(110.0, 20.0))
+
+        assert vm._point1 == QPointF(10.0, 20.0)
+        assert vm._point2 == QPointF(110.0, 20.0)
