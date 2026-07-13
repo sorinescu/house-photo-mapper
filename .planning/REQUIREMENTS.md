@@ -165,7 +165,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PM-02 | Phase 1 | Pending |
 | PM-03 | Phase 1 | Pending |
 | PM-04 | Phase 1 | Pending |
-| PM-05 | Phase 6 | Pending |
+| PM-05 | Phase 5 | Pending |
 | PI-01 | Phase 2 | Pending |
 | PI-02 | Phase 2 | Pending |
 | PI-03 | Phase 2 | Pending |
@@ -187,38 +187,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AN-06 | Phase 4 | Pending |
 | AN-07 | Phase 4 | Pending |
 | AN-08 | Phase 4 | Pending |
-| ED-01 | Phase 5 | Pending |
-| ED-02 | Phase 5 | Pending |
-| ED-03 | Phase 5 | Pending |
-| ED-04 | Phase 5 | Pending |
-| NA-01 | Phase 5 | Pending |
-| NA-02 | Phase 5 | Pending |
-| NA-03 | Phase 5 | Pending |
-| NA-04 | Phase 5 | Pending |
-| NA-05 | Phase 5 | Pending |
-| NA-06 | Phase 5 | Pending |
-| NA-07 | Phase 5 | Pending |
-| NA-08 | Phase 5 | Pending |
-| RG-01 | Phase 7 | Pending |
-| RG-02 | Phase 7 | Pending |
-| RG-03 | Phase 7 | Pending |
-| RG-04 | Phase 7 | Pending |
-| RG-05 | Phase 7 | Pending |
-| RG-06 | Phase 7 | Pending |
-| RG-07 | Phase 7 | Pending |
-| RG-08 | Phase 7 | Pending |
-| PP-01 | Phase 6 | Pending |
-| PP-02 | Phase 6 | Pending |
-| PP-03 | Phase 6 | Pending |
-| PF-01 | Phase 9 | Pending |
-| PF-02 | Phase 9 | Pending |
-| RL-01 | Phase 6 | Pending |
-| RL-02 | Phase 6 | Pending |
-| US-01 | Phase 8 | Pending |
-| US-02 | Phase 8 | Pending |
-| US-03 | Phase 8 | Pending |
-| US-04 | Phase 8 | Pending |
-| CP-01 | Phase 11 | Pending |
+| ED-01 | Phase 4 | Pending |
+| ED-02 | Phase 4 | Pending |
+| ED-03 | Phase 4 | Pending |
+| ED-04 | Phase 4 | Pending |
+| NA-01 | Phase 4 | Pending |
+| NA-02 | Phase 4 | Pending |
+| NA-03 | Phase 4 | Pending |
+| NA-04 | Phase 4 | Pending |
+| NA-05 | Phase 4 | Pending |
+| NA-06 | Phase 4 | Pending |
+| NA-07 | Phase 4 | Pending |
+| NA-08 | Phase 4 | Pending |
+| RG-01 | Phase 6 | Pending |
+| RG-02 | Phase 6 | Pending |
+| RG-03 | Phase 6 | Pending |
+| RG-04 | Phase 6 | Pending |
+| RG-05 | Phase 6 | Pending |
+| RG-06 | Phase 6 | Pending |
+| RG-07 | Phase 6 | Pending |
+| RG-08 | Phase 6 | Pending |
+| PP-01 | Phase 5 | Pending |
+| PP-02 | Phase 5 | Pending |
+| PP-03 | Phase 5 | Pending |
+| PF-01 | Phase 5 | Pending |
+| PF-02 | Phase 5 | Pending |
+| RL-01 | Phase 5 | Pending |
+| RL-02 | Phase 5 | Pending |
+| US-01 | Phase 4 | Pending |
+| US-02 | Phase 4 | Pending |
+| US-03 | Phase 5 | Pending |
+| US-04 | Phase 5 | Pending |
+| CP-01 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 39 total
@@ -227,4 +227,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2025-07-13*
-*Last updated: 2025-07-13 after initial definition*
+*Last updated: 2025-07-13 after roadmap creation*
