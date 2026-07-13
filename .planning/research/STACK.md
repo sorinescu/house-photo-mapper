@@ -1,7 +1,7 @@
 # Technology Stack
 
-**Project:** HousePhotoMapper  
-**Researched:** 2025-07-13  
+**Project:** HousePhotoMapper
+**Researched:** 2025-07-13
 **Overall Confidence:** HIGH
 
 ---

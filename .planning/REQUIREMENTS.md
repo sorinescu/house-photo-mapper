@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Project Management
 
-- [ ] **PM-01**: User can create a new project
-- [ ] **PM-02**: User can open an existing project
-- [ ] **PM-03**: User can save a project
-- [ ] **PM-04**: User can save project as (Save As)
+- [x] **PM-01**: User can create a new project
+- [x] **PM-02**: User can open an existing project
+- [x] **PM-03**: User can save a project
+- [x] **PM-04**: User can save project as (Save As)
 - [ ] **PM-05**: User project auto-saves every 2 minutes
 
 ### Plan Import
@@ -99,7 +99,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Compatibility (macOS Only)
 
-- [ ] **CP-01**: Application runs natively on macOS (Apple Silicon + Intel)
+- [x] **CP-01**: Application runs natively on macOS (Apple Silicon + Intel)
 
 ## v2 Requirements
 
@@ -161,10 +161,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PM-01 | Phase 1 | Pending |
-| PM-02 | Phase 1 | Pending |
-| PM-03 | Phase 1 | Pending |
-| PM-04 | Phase 1 | Pending |
+| PM-01 | Phase 1 | Complete |
+| PM-02 | Phase 1 | Complete |
+| PM-03 | Phase 1 | Complete |
+| PM-04 | Phase 1 | Complete |
 | PM-05 | Phase 5 | Pending |
 | PI-01 | Phase 2 | Pending |
 | PI-02 | Phase 2 | Pending |
@@ -218,9 +218,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | US-02 | Phase 4 | Pending |
 | US-03 | Phase 5 | Pending |
 | US-04 | Phase 5 | Pending |
-| CP-01 | Phase 1 | Pending |
+| CP-01 | Phase 1 | Complete |
 
 **Coverage:**
+
 - v1 requirements: 39 total
 - Mapped to phases: 39
 - Unmapped: 0 ✓

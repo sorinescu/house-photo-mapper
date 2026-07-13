@@ -5,6 +5,7 @@ description = "Minimize time to document buildings while producing professional,
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pillow>=12.3.0",
     "pydantic>=2.13.4",
     "pyside6>=6.11.1",
     "structlog>=26.1.0",
@@ -96,3 +97,31 @@ exclude_lines = [
 
 [tool.pre-commit]
 default_install_hook_types = ["pre-commit", "pre-push"]
+
+[tool.pyappdist]
+name = "HousePhotoMapper"
+python = "3.12"
+macos_deployment_target = "10.14"
+identifier = "com.housephotomapper.HousePhotoMapper"
+
+[[tool.pyappdist.launchers]]
+name = "house-photo-mapper"
+entry = "house_photo_mapper.__main__:main"
+gui = true
+icon = { macos = "resources/icons/app_1024.png" }
+
+[[tool.pyappdist.targets]]
+name = "macos-arm64-app"
+platform = "macos-aarch64"
+format = "macapp"
+codesign_identity = { env = "CODESIGN_IDENTITY" }
+entitlements = "resources/entitlements.plist"
+
+[[tool.pyappdist.targets]]
+name = "macos-arm64-dmg"
+platform = "macos-aarch64"
+format = "dmg"
+codesign_identity = { env = "CODESIGN_IDENTITY" }
+entitlements = "resources/entitlements.plist"
+notarize = true
+notarize_profile = { env = "NOTARY_PROFILE" }

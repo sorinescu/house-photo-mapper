@@ -3,17 +3,12 @@
 import sys
 from typing import NoReturn
 
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication
 
+from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.infrastructure.logging import configure_logging
-
-
-def _create_placeholder_window() -> QMainWindow:
-    """Create a placeholder MainWindow for scaffolding phase."""
-    window = QMainWindow()
-    window.setWindowTitle("HousePhotoMapper (Scaffolding)")
-    window.resize(800, 600)
-    return window
+from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
+from house_photo_mapper.presentation.views.main_window import MainWindow
 
 
 def create_application() -> QApplication:
@@ -31,17 +26,9 @@ def main() -> NoReturn:
     configure_logging()
     app = create_application()
 
-    # Import here to avoid circular imports
-    # MainWindow is implemented in Plan 01-02; use a placeholder for scaffolding
-    try:
-        from house_photo_mapper.presentation.views.main_window import (
-            MainWindow,  # type: ignore[import-not-found]
-        )
-
-        window = MainWindow()
-    except ImportError:
-        window = _create_placeholder_window()
-
+    persistence = PersistenceService()
+    vm = MainWindowViewModel(persistence)
+    window = MainWindow(vm, persistence)
     window.show()
 
     sys.exit(app.exec())

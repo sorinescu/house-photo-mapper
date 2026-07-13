@@ -69,7 +69,7 @@
 
 #### 1. Project Load Flow
 ```
-User → MainWindow.openProject() 
+User → MainWindow.openProject()
     → ProjectVM.loadProject(path)
     → PersistenceService.readJSON(path)
     → ProjectModel.deserialize(data)
@@ -124,7 +124,7 @@ class PlanViewModel(QObject):
     currentFloorChanged = Signal(int)
     zoomLevelChanged = Signal(float)
     annotationToolChanged = Signal(str)
-    
+
     def __init__(self, plan_model: PlanModel, project_vm: ProjectViewModel):
         super().__init__()
         self._model = plan_model
@@ -132,10 +132,10 @@ class PlanViewModel(QObject):
         self._current_floor = 0
         self._zoom = 1.0
         self._tool = "select"
-    
+
     @Property(int, notify=currentFloorChanged)
     def currentFloor(self): return self._current_floor
-    
+
     @currentFloor.setter
     def currentFloor(self, value):
         if self._current_floor != value:
@@ -163,12 +163,12 @@ class CameraMarker(QGraphicsEllipseItem):
         self.setBrush(QBrush(QColor("#FF3B30")))
         self.setPen(QPen(Qt.white, 2))
         self._viewing_cone = None
-    
+
     def itemChange(self, change, value):
         if change == ItemPositionChange and self._viewing_cone:
             self._viewing_cone.updateFromMarker(value)
         return super().itemChange(change, value)
-    
+
     def to_dict(self) -> dict:
         pos = self.scenePos()
         return {"type(self)
@@ -196,7 +196,7 @@ class ThumbnailWorker(QRunnable):
         self.paths = paths
         self.size = size
         self.signals = ThumbnailWorkerSignals()
-    
+
     def run(self):
         for i, path in enumerate(self.paths):
             pixmap = self._generate_thumbnail(path, self.size)
@@ -225,10 +225,10 @@ class MoveMarkerCommand(QUndoCommand):
         self._marker = marker
         self._old_pos = old_pos
         self._new_pos = new_pos
-    
+
     def redo(self): self._marker.setPos(self._new_pos)
     def undo(self): self._marker.setPos(self._old_pos)
-    
+
     def id(self): return 1001  # for command compression
     def mergeWith(self, other):
         if other.id() == 1001 and other._marker is self._marker:
@@ -261,7 +261,7 @@ class MoveMarkerCommand(QUndoCommand):
     { "id": "photo_2", "file": "assets/photos/IMG_002.jpg", "exif": {...}, "hash": "d4e5f6..." }
   ],
   "annotations": [
-    { "id": "ann_1", "plan_id": "plan_1", "photo_id": "photo_1", 
+    { "id": "ann_1", "plan_id": "plan_1", "photo_id": "photo_1",
       "type": "camera", "x": 1250, "y": 890, "floor": 0,
       "cone_angle": 45, "cone_direction": 90,
       "title": "Living Room", "description": "Main view from entrance" }

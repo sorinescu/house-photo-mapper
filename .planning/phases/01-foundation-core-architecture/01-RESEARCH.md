@@ -403,19 +403,19 @@ from house_photo_mapper.domain.services.persistence import PersistenceService
 def main() -> int:
     configure_logging()
     log = structlog.get_logger()
-    
+
     QCoreApplication.setOrganizationName("HousePhotoMapper")
     QCoreApplication.setApplicationName("HousePhotoMapper")
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
-    
+
     app = QApplication(sys.argv)
     app.setApplicationDisplayName("House Photo Mapper")
-    
+
     persistence = PersistenceService()
     vm = MainWindowViewModel(persistence)
     window = MainWindow(vm)
     window.show()
-    
+
     log.info("app_started", version="0.1.0")
     return app.exec()
 
@@ -434,37 +434,37 @@ class PersistenceService:
     def __init__(self):
         self._settings = QSettings(QSettings.NativeFormat, QSettings.UserScope,
                                     "HousePhotoMapper", "HousePhotoMapper")
-    
+
     def save_project(self, project: ProjectModel) -> None:
         path = Path(project.path)
         path.write_text(project.model_dump_json(indent=2))
         self._add_recent_project(str(path))
-    
+
     def load_project(self, path: str) -> ProjectModel:
         data = Path(path).read_text()
         project = ProjectModel.model_validate_json(data)
         self._add_recent_project(path)
         return project
-    
+
     def get_recent_projects(self) -> list[str]:
         return self._settings.value("recentProjects", [], type=list)
-    
+
     def _add_recent_project(self, path: str) -> None:
         recent = self.get_recent_projects()
         if path in recent:
             recent.remove(path)
         recent.insert(0, path)
         self._settings.setValue("recentProjects", recent[:10])
-    
+
     def save_window_geometry(self, geometry: bytes) -> None:
         self._settings.setValue("mainWindow/geometry", geometry)
-    
+
     def load_window_geometry(self) -> bytes | None:
         return self._settings.value("mainWindow/geometry", type=bytes)
-    
+
     def save_window_state(self, state: bytes) -> None:
         self._settings.setValue("mainWindow/state", state)
-    
+
     def load_window_state(self) -> bytes | None:
         return self._settings.value("mainWindow/state", type=bytes)
 ```

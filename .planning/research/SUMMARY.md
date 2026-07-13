@@ -1,7 +1,7 @@
 # Project Research Summary
 
-**Project:** HousePhotoMapper  
-**Synthesized:** 2025-07-13  
+**Project:** HousePhotoMapper
+**Synthesized:** 2025-07-13
 **Sources:** STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md
 
 ---
