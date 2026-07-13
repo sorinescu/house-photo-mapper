@@ -3,12 +3,16 @@
 import pytest
 from pydantic import ValidationError
 from pathlib import Path
+from unittest.mock import MagicMock, patch, mock_open
+import tempfile
+import os
 
 from house_photo_mapper.domain.models.plan import (
     PageModel,
     CalibrationModel,
     PlanModel,
 )
+from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
 
 
 class TestCalibrationModel:
@@ -406,6 +410,168 @@ class TestPlanModelIntegration:
         assert plan2.pages[0].calibration.pixels_per_meter == 150.5
         assert plan2.pages[0].calibration.verified is True
         assert plan2.pages[0].calibration.reference_point1 == [10.0, 20.0]
+
+
+class TestPlanRenderer:
+    """Tests for PlanRenderer with PyMuPDF display list caching and Pillow image loading."""
+
+    def setup_method(self):
+        """Create a test PDF for renderer tests."""
+        import fitz
+
+        self.doc = fitz.open()
+        page = self.doc.new_page(width=612, height=792)
+        page.draw_rect(fitz.Rect(50, 50, 200, 200), color=(1, 0, 0), fill=(1, 0, 0))
+        page.insert_text((100, 300), "Renderer Test", fontsize=24, color=(0, 0, 0))
+
+        self.temp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        self.doc.save(self.temp_file.name)
+        self.doc.close()
+        self.pdf_path = self.temp_file.name
+
+    def teardown_method(self):
+        """Clean up test PDF."""
+        if hasattr(self, "pdf_path") and Path(self.pdf_path).exists():
+            Path(self.pdf_path).unlink()
+
+    def test_plan_renderer_init(self):
+        """Test PlanRenderer opens PDF document."""
+        renderer = PlanRenderer(self.pdf_path)
+        assert renderer.page_count() == 1
+        renderer.close()
+
+    def test_render_page_returns_qpixmap(self, qapp):
+        """Test render_page returns a QPixmap."""
+        from PySide6.QtGui import QPixmap
+
+        renderer = PlanRenderer(self.pdf_path)
+        try:
+            pixmap = renderer.render_page(0, dpi=150)
+            assert isinstance(pixmap, QPixmap)
+            assert not pixmap.isNull()
+            assert pixmap.width() > 0
+            assert pixmap.height() > 0
+        finally:
+            renderer.close()
+
+    def test_render_page_multiple_dpi(self, qapp):
+        """Test render_page at different DPI levels produces different sizes."""
+        renderer = PlanRenderer(self.pdf_path)
+        try:
+            pix_72 = renderer.render_page(0, dpi=72)
+            pix_150 = renderer.render_page(0, dpi=150)
+            pix_300 = renderer.render_page(0, dpi=300)
+
+            # Higher DPI = larger pixmap
+            assert pix_150.width() > pix_72.width()
+            assert pix_300.width() > pix_150.width()
+            assert pix_150.height() > pix_72.height()
+            assert pix_300.height() > pix_150.height()
+        finally:
+            renderer.close()
+
+    def test_display_list_cached(self):
+        """Test display list is cached and reused on second call."""
+        renderer = PlanRenderer(self.pdf_path)
+        try:
+            dlist1 = renderer.get_display_list(0)
+            dlist2 = renderer.get_display_list(0)
+            # Same object should be returned (cached)
+            assert dlist1 is dlist2
+            assert 0 in renderer._display_lists
+        finally:
+            renderer.close()
+
+    def test_display_list_different_pages(self):
+        """Test different pages get different display lists."""
+        import fitz
+        # Create multi-page PDF
+        doc = fitz.open()
+        for i in range(3):
+            page = doc.new_page()
+            page.insert_text((50, 100), f"Page {i+1}", fontsize=24)
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        doc.save(tmp.name)
+        doc.close()
+
+        try:
+            renderer = PlanRenderer(tmp.name)
+            dlist0 = renderer.get_display_list(0)
+            dlist1 = renderer.get_display_list(1)
+            dlist2 = renderer.get_display_list(2)
+            assert dlist0 is not dlist1
+            assert dlist1 is not dlist2
+            assert renderer.page_count() == 3
+            renderer.close()
+        finally:
+            Path(tmp.name).unlink()
+
+    def test_load_image_returns_qpixmap(self, qapp):
+        """Test load_image returns QPixmap from PNG file."""
+        from PySide6.QtGui import QPixmap
+        from PIL import Image
+
+        # Create test PNG
+        img = Image.new("RGB", (200, 100), color=(255, 0, 0))
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        img.save(tmp.name)
+        tmp.close()
+
+        try:
+            renderer = PlanRenderer(self.pdf_path)
+            pixmap = renderer.load_image(tmp.name)
+            assert isinstance(pixmap, QPixmap)
+            assert not pixmap.isNull()
+            assert pixmap.width() == 200
+            assert pixmap.height() == 100
+            renderer.close()
+        finally:
+            Path(tmp.name).unlink()
+
+    def test_load_image_exif_orientation(self, qapp):
+        """Test load_image applies EXIF orientation correction."""
+        from PIL import Image, ImageOps
+        import io
+
+        # Create image with EXIF orientation tag (rotate 90° CW)
+        img = Image.new("RGB", (200, 100), color=(0, 255, 0))
+        # Add EXIF data with orientation=6 (90° CW rotation)
+        exif_data = img.getexif()
+        exif_data[0x0112] = 6  # Orientation tag = 6 (90° CW)
+        img.info["exif"] = exif_data.tobytes()
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        img.save(tmp.name, exif=img.info.get("exif"))
+        tmp.close()
+
+        try:
+            renderer = PlanRenderer(self.pdf_path)
+            pixmap = renderer.load_image(tmp.name)
+            # After EXIF rotation, width/height should be swapped
+            # Original 200x100 with 90° rotation -> 100x200
+            assert pixmap.width() == 100
+            assert pixmap.height() == 200
+            renderer.close()
+        finally:
+            Path(tmp.name).unlink()
+
+    def test_close_releases_resources(self):
+        """Test close() releases MuPDF resources."""
+        renderer = PlanRenderer(self.pdf_path)
+        # Populate display list cache
+        renderer.get_display_list(0)
+        assert len(renderer._display_lists) == 1
+
+        renderer.close()
+        assert len(renderer._display_lists) == 0
+
+    def test_context_manager(self, qapp):
+        """Test PlanRenderer works as context manager."""
+        with PlanRenderer(self.pdf_path) as renderer:
+            pixmap = renderer.render_page(0)
+            assert not pixmap.isNull()
+        # Should be closed after context exit
+        assert len(renderer._display_lists) == 0
 
 
 if __name__ == "__main__":

@@ -14,7 +14,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QObject, QRunnable, Slot
+from PySide6.QtCore import QObject, QRunnable, Slot, QPointF, QPoint, Qt
+from PySide6.QtGui import QPainter, QWheelEvent, QMouseEvent, QKeyEvent
+from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 if TYPE_CHECKING:
     from PySide6.QtCore import QObject as QObjectType
@@ -179,3 +181,155 @@ def safe_connect(
         return True
     except Exception:
         return False
+
+
+# =============================================================================
+# Plan Viewport Classes (Phase 2)
+# =============================================================================
+
+class PlanGraphicsScene(QGraphicsScene):
+    """QGraphicsScene for plan viewport with NoIndex mode.
+
+    NoIndex is MANDATORY — default BspTreeIndex causes O(n²) degradation
+    with overlapping items (plan pixmap + annotations). Linear lookup is
+    fast for <100 items.
+    """
+
+    def __init__(self, parent: QObjectType | None = None) -> None:
+        """Initialize scene with NoIndex mode.
+
+        Args:
+            parent: Parent QObject.
+        """
+        super().__init__(parent)
+        # CRITICAL: NoIndex mode prevents BSP tree degradation with
+        # plan pixmap (large rect) + annotation items (overlapping)
+        self.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
+        # Default scene rect; updated per page
+        self.setSceneRect(0, 0, 1, 1)
+
+    def set_page_size(self, width: float, height: float) -> None:
+        """Update scene rect to match page size in scene coordinates.
+
+        Args:
+            width: Page width in scene units.
+            height: Page height in scene units.
+        """
+        self.setSceneRect(0, 0, width, height)
+
+
+class PlanGraphicsView(QGraphicsView):
+    """Plan viewport with zoom (Ctrl+wheel), pan (middle mouse), rotate (R/Shift+R).
+
+    Implements RESEARCH.md Pattern 3:
+    - AnchorUnderMouse + viewport.mouseTracking → zoom centers on cursor
+    - Middle mouse drag → translate() with scale compensation
+    - R/Shift+R → rotate(±90°)
+    - No scrollbars, MinimalViewportUpdate for performance
+    """
+
+    def __init__(
+        self,
+        scene: PlanGraphicsScene,
+        parent: QObjectType | None = None,
+    ) -> None:
+        """Initialize plan graphics view.
+
+        Args:
+            scene: PlanGraphicsScene to display.
+            parent: Parent QWidget.
+        """
+        super().__init__(scene, parent)
+
+        # Zoom centers on mouse cursor (RESEARCH.md Pitfall 5 fix)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+
+        # Smooth rendering
+        self.setRenderHints(
+            QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform
+        )
+
+        # No drag mode - we handle pan via middle mouse
+        self.setDragMode(QGraphicsView.DragMode.NoDrag)
+
+        # No scrollbars - pan via middle mouse
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        # Minimal viewport updates for performance
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.MinimalViewportUpdate)
+
+        # CRITICAL: Mouse tracking enables AnchorUnderMouse on first wheel event
+        self.viewport().setMouseTracking(True)
+
+        # Pan state
+        self._pan_active = False
+        self._pan_start = QPointF()
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """Handle wheel event: Ctrl+wheel zooms, else passes to parent."""
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            # Zoom factor 1.15 per step (smooth, not too fast)
+            factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+            self.scale(factor, factor)
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse press: middle button starts pan."""
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._pan_active = True
+            self._pan_start = event.position()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse move: pan if middle button held."""
+        if self._pan_active:
+            delta = event.position() - self._pan_start
+            # Translate in view coordinates, compensating for current scale
+            t = self.transform()
+            self.translate(delta.x() / t.m11(), delta.y() / t.m22())
+            self._pan_start = event.position()
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse release: middle button ends pan."""
+        if event.button() == Qt.MouseButton.MiddleButton and self._pan_active:
+            self._pan_active = False
+            self.unsetCursor()
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Handle key press: R rotates 90° CW, Shift+R rotates 90° CCW."""
+        if event.key() == Qt.Key.Key_R:
+            angle = -90 if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else 90
+            self.rotate(angle)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    def get_calibration_transform(self) -> tuple[float, QPointF]:
+        """Return (pixels_per_meter, scene_origin) for calibration storage.
+
+        Scene origin in view coordinates at current transform. ppm derived
+        from current scale assuming scene units = meters.
+
+        Returns:
+            Tuple of (ppm, scene_origin).
+        """
+        # Scene origin (0,0) mapped to view coordinates
+        scene_origin = self.mapToScene(QPoint(0, 0))
+        # Current scale factor (view pixels per scene unit)
+        scale = self.transform().m11()
+        # ppm = 1 / scale if scene units are meters
+        ppm = 1.0 / scale if scale != 0 else 1.0
+        return ppm, scene_origin
