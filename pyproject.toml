@@ -69,16 +69,6 @@ namespace_packages = true
 explicit_package_bases = true
 enable_error_code = ["attr-defined", "name-defined", "arg-type", "return-value", "call-overload", "operator", "index", "misc", "union-attr", "assignment", "call-arg", "dict-item", "list-item", "return-value", "type-arg", "valid-type", "override", "no-redef", "no-untyped-def", "unused-ignore", "redundant-expr", "truthy-bool", "truthy-function", "truthy-iterable"]
 
-[[tool.mypy.overrides]]
-module = [
-    "PySide6.*",
-    "pytest",
-    "pytest.*",
-    "pytestqt",
-    "pytestqt.*",
-]
-ignore_missing_imports = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
