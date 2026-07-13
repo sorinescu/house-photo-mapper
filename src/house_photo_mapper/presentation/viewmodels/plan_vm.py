@@ -29,6 +29,8 @@ class PlanViewModel(QtSafeViewModel):
     rotation_changed = Signal(int)       # Emits rotation angle (0, 90, 180, 270)
     calibration_changed = Signal(object) # Emits CalibrationModel or None
     pages_changed = Signal(list)         # Emits sorted page list
+    pages_reordered = Signal(list)       # Emits reordered page list
+    floor_changed = Signal(int, int)     # Emits (page_num, floor) when floor changes
     error_occurred = Signal(str)         # Emits error messages
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -348,6 +350,79 @@ class PlanViewModel(QtSafeViewModel):
 
         except Exception as e:
             self.error_occurred.emit(f"Failed to load image: {e}")
+
+    @Slot(list)
+    def on_sidebar_order_changed(self, order_list: list[dict]) -> None:
+        """Handle sidebar drag-reorder and update PlanModel page order.
+
+        Args:
+            order_list: List of dicts with page_num, floor, order from sidebar.
+        """
+        if self._plan_model is None:
+            return
+
+        # Reorder PlanModel.pages to match sidebar order
+        # Build mapping from page_num to page
+        page_map = {p.page_index: p for p in self._plan_model.pages}
+
+        # Update order field and reorder pages list
+        for order_info in order_list:
+            page_num = order_info["page_num"]
+            order = order_info["order"]
+            if page_num in page_map:
+                page_map[page_num].order = order
+
+        # Sort pages by order field
+        self._plan_model.pages.sort(key=lambda p: p.order)
+
+        # Emit signal
+        self.pages_reordered.emit(self._plan_model.pages)
+
+    @Slot(int, int)
+    def on_sidebar_floor_changed(self, page_num: int, floor: int) -> None:
+        """Handle floor combo change from sidebar and update PlanModel.
+
+        Args:
+            page_num: Page number (0-based source index).
+            floor: New floor number (-2 to 10).
+        """
+        if self._plan_model is None:
+            return
+
+        # Find page by page_num (page_index)
+        for page in self._plan_model.pages:
+            if page.page_index == page_num:
+                page.floor = floor
+                self.floor_changed.emit(page_num, floor)
+                break
+
+    @Slot(int)
+    def on_sidebar_page_clicked(self, page_num: int) -> None:
+        """Handle page click from sidebar and switch active page.
+
+        Args:
+            page_num: Page number (0-based source index) clicked in sidebar.
+        """
+        if self._plan_model is None:
+            return
+
+        # Find the index in sorted pages list
+        sorted_pages = self._plan_model.get_sorted_pages()
+        for idx, page in enumerate(sorted_pages):
+            if page.page_index == page_num:
+                self.set_page(idx)
+                break
+
+    @property
+    def pages(self) -> list[PageModel]:
+        """Get pages property for sidebar initial population.
+
+        Returns:
+            List of PageModel sorted by display order.
+        """
+        if self._plan_model is None:
+            return []
+        return self._plan_model.get_sorted_pages()
 
 
 if __name__ == "__main__":
