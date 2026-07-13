@@ -124,6 +124,13 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._vm.open_project)
         menu.addAction(open_action)
 
+        # Import Plan
+        import_action = QAction("Import &Plan...", self)
+        import_action.setShortcut(QKeySequence("Ctrl+Shift+I"))
+        import_action.setStatusTip("Import a PDF or image plan file")
+        import_action.triggered.connect(self._vm.import_plan)
+        menu.addAction(import_action)
+
         menu.addSeparator()
 
         # Save
