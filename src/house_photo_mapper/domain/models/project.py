@@ -1,10 +1,9 @@
 """ProjectModel - Core domain model for HousePhotoMapper projects."""
 
-from dataclasses import field
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 
 class ExportSettings(BaseModel):
@@ -48,7 +47,7 @@ class ProjectModel(BaseModel):
     annotations: list[dict[str, Any]] = Field(default_factory=list)
     export_settings: ExportSettings = Field(default_factory=ExportSettings)
     ui_preferences: UIPreferences = Field(default_factory=UIPreferences)
-    _dirty: bool = field(default=False, init=False, repr=False)
+    _dirty: bool = PrivateAttr(default=False)
 
     @classmethod
     def create_empty(cls, path: str | Path) -> "ProjectModel":

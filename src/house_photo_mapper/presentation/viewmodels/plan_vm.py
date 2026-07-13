@@ -60,6 +60,35 @@ class PlanViewModel(QtSafeViewModel):
             self.set_page(0)
         self.pages_changed.emit(self.get_sorted_pages() if model else [])
 
+    def set_plan_model(self, model: PlanModel) -> None:
+        """Set plan model and emit all UI sync signals.
+
+        Replaces internal PlanModel reference. Emits pages_changed for sidebar,
+        page_changed for active page, calibration_changed for current page.
+
+        Args:
+            model: PlanModel to set.
+        """
+        self._plan_model = model
+        self._current_page_index = -1
+        self._initial_fit_done = False
+
+        sorted_pages = model.get_sorted_pages()
+        self.pages_changed.emit(sorted_pages)
+
+        if sorted_pages:
+            self.set_page(model.active_page_index if model.active_page_index < len(sorted_pages) else 0)
+        else:
+            self.calibration_changed.emit(None)
+
+    def get_plan_model(self) -> PlanModel | None:
+        """Get current plan model for persistence.
+
+        Returns:
+            Current PlanModel or None if not loaded.
+        """
+        return self._plan_model
+
     @property
     def plan_renderer(self) -> PlanRenderer | None:
         """Get current plan renderer."""

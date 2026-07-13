@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal, Slot
 
+from house_photo_mapper.domain.models.plan import PlanModel
 from house_photo_mapper.domain.models.project import ProjectModel
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.infrastructure.qt_patterns import QtSafeViewModel
 
 if TYPE_CHECKING:
     from house_photo_mapper.domain.services.persistence import PersistenceService
+    from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
 
 
 class ProjectViewModel(QtSafeViewModel):
@@ -40,6 +42,8 @@ class ProjectViewModel(QtSafeViewModel):
         self._persistence = persistence
         self._project: ProjectModel | None = None
         self._dirty = False
+        self._plan_vm: PlanViewModel | None = None
+        self._plan_model: PlanModel | None = None
 
     @property
     def project(self) -> ProjectModel | None:
@@ -85,12 +89,25 @@ class ProjectViewModel(QtSafeViewModel):
     def open_project(self, path: str) -> None:
         """Open an existing project from the given path.
 
+        Loads both .hpmpj and plans.json. Injects PlanModel into PlanViewModel.
+
         Args:
             path: File path to the .hpmpj project file.
         """
         try:
             self._project = self._persistence.load_project(path)
             self._dirty = False
+
+            # Load PlanModel from plans.json
+            project_dir = Path(path).parent
+            self._plan_model = self._persistence.load_plan_model(project_dir)
+            if self._plan_model is None:
+                self._plan_model = PlanModel()
+
+            # Inject into PlanViewModel if available
+            if self._plan_vm is not None:
+                self._plan_vm.plan_model = self._plan_model
+
             self._emit_project_changed()
             self._emit_dirty_changed()
             self._emit_recent_projects_changed()
@@ -110,6 +127,10 @@ class ProjectViewModel(QtSafeViewModel):
 
         try:
             self._persistence.save_project(self._project)
+            # Save PlanModel if available
+            project_dir = self._project_dir()
+            if project_dir and self._plan_model is not None:
+                self._persistence.save_plan_model(self._plan_model, project_dir)
             self._dirty = False
             self._emit_dirty_changed()
         except Exception as e:
@@ -152,3 +173,22 @@ class ProjectViewModel(QtSafeViewModel):
     def get_recent_projects(self) -> list[str]:
         """Get list of recent project paths."""
         return self._persistence.get_recent_projects()
+
+    def set_plan_vm(self, plan_vm: "PlanViewModel") -> None:
+        """Set the PlanViewModel reference for plan persistence coordination.
+
+        Args:
+            plan_vm: PlanViewModel instance to coordinate with.
+        """
+        self._plan_vm = plan_vm
+
+    @property
+    def plan_model(self) -> PlanModel | None:
+        """Get current PlanModel."""
+        return self._plan_model
+
+    def _project_dir(self) -> Path | None:
+        """Get project directory from current project path."""
+        if self._project and self._project.path:
+            return Path(self._project.path).parent
+        return None
