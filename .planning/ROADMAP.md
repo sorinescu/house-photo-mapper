@@ -60,7 +60,7 @@ Plans:
   5. Large PDFs (>50MB) render via tile pyramid without UI freezing
   6. User can assign floor numbers to plan pages and reorder them
 
-**Plans**: TBD
+**Plans:** 6 plans
 
 Plans:
 
@@ -69,6 +69,7 @@ Plans:
 - [ ] 02-03: Multi-page navigation — page sidebar, floor assignment UI, drag-reorder
 - [ ] 02-04: Specification-based calibration — known dimension input, second-dimension verification, endpoint snap
 - [ ] 02-05: PlanModel persistence — serialization to project JSON, coordinate transform storage
+- [ ] 02-06: Import Plan UI wiring — File menu action, QFileDialog, extension routing to PlanViewModel (gap closure)
 
 ### Phase 3: Photo System
 
