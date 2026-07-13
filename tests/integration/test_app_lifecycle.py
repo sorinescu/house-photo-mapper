@@ -27,6 +27,7 @@ class TestAppLifecycleScaffold:
         """Placeholder for MainWindow creation test."""
         try:
             from house_photo_mapper.presentation.views.main_window import MainWindow
+
             window = MainWindow()
             assert window is not None
             window.close()

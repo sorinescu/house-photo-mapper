@@ -18,6 +18,7 @@ class TestPersistenceServiceScaffold:
         """Test that PersistenceService can be imported (will fail until implemented)."""
         try:
             from house_photo_mapper.domain.services.persistence import PersistenceService
+
             assert PersistenceService is not None
         except ImportError:
             pytest.skip("PersistenceService not yet implemented")

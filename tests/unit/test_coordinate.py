@@ -20,6 +20,7 @@ class TestCoordinateSystemScaffold:
         # ImportError is expected at this stage
         try:
             from house_photo_mapper.domain.models.coordinate import CoordinateSystem
+
             assert CoordinateSystem is not None
         except ImportError:
             pytest.skip("Coordinate module not yet implemented")

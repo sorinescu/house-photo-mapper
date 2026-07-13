@@ -18,6 +18,7 @@ class TestProjectModelScaffold:
         """Test that ProjectModel can be imported (will fail until implemented)."""
         try:
             from house_photo_mapper.domain.models.project import ProjectModel
+
             assert ProjectModel is not None
         except ImportError:
             pytest.skip("ProjectModel not yet implemented")

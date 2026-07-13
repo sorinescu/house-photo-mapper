@@ -34,7 +34,9 @@ def main() -> NoReturn:
     # Import here to avoid circular imports
     # MainWindow is implemented in Plan 01-02; use a placeholder for scaffolding
     try:
-        from house_photo_mapper.presentation.views.main_window import MainWindow
+        from house_photo_mapper.presentation.views.main_window import (
+            MainWindow,  # type: ignore[import-not-found]
+        )
 
         window = MainWindow()
     except ImportError:
