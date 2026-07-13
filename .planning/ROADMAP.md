@@ -14,7 +14,7 @@ HousePhotoMapper delivers a professional desktop application for correlating bui
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Core Architecture** - Project scaffolding, MVVM skeleton, coordinate system, macOS app bundle (completed 2026-07-13)
-- [ ] **Phase 2: Plan System** - PDF/PNG/JPG import, multi-page navigation, zoom/pan/rotate, tile pyramid rendering
+- [x] **Phase 2: Plan System** - PDF/PNG/JPG import, multi-page navigation, zoom/pan/rotate, tile pyramid rendering (completed 2026-07-13)
 - [ ] **Phase 3: Photo System** - Drag-drop/folder import, EXIF extraction, duplicate detection, lazy-loaded thumbnails
 - [ ] **Phase 4: Annotation Tools** - Camera marker, direction arrow, viewing cone, visible polygon, metadata, undo/redo, shortcuts
 - [ ] **Phase 5: Project Persistence & Performance** - JSON serialization, auto-save, crash recovery, dark/light mode, <100ms viewport
@@ -60,16 +60,25 @@ Plans:
   5. Large PDFs (>50MB) render via tile pyramid without UI freezing
   6. User can assign floor numbers to plan pages and reorder them
 
-**Plans:** 6 plans
+**Plans:** 7/7 plans complete
 
 Plans:
 
-- [ ] 02-01: PyMuPDF integration — PDF document model, page rendering to QImage, tile pyramid generator
-- [ ] 02-02: Plan viewport — QGraphicsScene with NoIndex mode, PlanViewVM, zoom/pan/rotate handlers
-- [ ] 02-03: Multi-page navigation — page sidebar, floor assignment UI, drag-reorder
-- [ ] 02-04: Specification-based calibration — known dimension input, second-dimension verification, endpoint snap
-- [ ] 02-05: PlanModel persistence — serialization to project JSON, coordinate transform storage
-- [ ] 02-06: Import Plan UI wiring — File menu action, QFileDialog, extension routing to PlanViewModel (gap closure)
+- [x] 02-01-PLAN.md
+- [x] 02-02-PLAN.md
+- [x] 02-03-PLAN.md
+- [x] 02-04-PLAN.md
+- [x] 02-05-PLAN.md
+- [x] 02-06-PLAN.md
+- [ ] 02-07-PLAN.md
+
+- [x] 02-01: PyMuPDF integration — PDF document model, page rendering to QImage, tile pyramid generator
+- [x] 02-02: Plan viewport — QGraphicsScene with NoIndex mode, PlanViewVM, zoom/pan/rotate handlers
+- [x] 02-03: Multi-page navigation — page sidebar, floor assignment UI, drag-reorder
+- [x] 02-04: Specification-based calibration — known dimension input, second-dimension verification, endpoint snap
+- [x] 02-05: PlanModel persistence — serialization to project JSON, coordinate transform storage
+- [x] 02-06: Import Plan UI wiring — File menu action, QFileDialog, extension routing to PlanViewModel (gap closure)
+- [ ] 02-07: Gap closure verification — verify import UI works, update UAT status (gap closure)
 
 ### Phase 3: Photo System
 
@@ -200,7 +209,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Core Architecture | 5/5 | Complete    | 2026-07-13 |
-| 2. Plan System | 0/TBD | Not started | - |
+| 2. Plan System | 7/7 | In progress   | - |
 | 3. Photo System | 0/TBD | Not started | - |
 | 4. Annotation Tools | 0/TBD | Not started | - |
 | 5. Project Persistence & Performance | 0/TBD | Not started | - |
