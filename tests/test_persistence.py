@@ -289,3 +289,152 @@ class TestProjectPlanIntegration:
         assert cal is not None
         assert cal.pixels_per_meter == 150.0
         assert cal.verified is True
+
+
+class TestPlanUISyncOnLoad:
+    """Test PlanViewModel UI sync signals on project load."""
+
+    def test_set_plan_model_emits_pages_changed(
+        self, sample_plan: PlanModel, qapp
+    ) -> None:
+        """set_plan_model emits pages_changed with sorted page list."""
+        plan_vm = PlanViewModel()
+        pages_received = []
+        plan_vm.pages_changed.connect(lambda pages: pages_received.append(pages))
+
+        plan_vm.set_plan_model(sample_plan)
+
+        assert len(pages_received) == 1
+        assert len(pages_received[0]) == 2
+        # Pages sorted by order
+        assert pages_received[0][0].order == 0
+        assert pages_received[0][1].order == 1
+
+    def test_set_plan_model_sets_active_page(
+        self, sample_plan: PlanModel, qapp
+    ) -> None:
+        """set_plan_model sets current_page_index and emits page_changed."""
+        plan_vm = PlanViewModel()
+        page_indices = []
+        plan_vm.page_changed.connect(lambda idx: page_indices.append(idx))
+
+        plan_vm.set_plan_model(sample_plan)
+
+        assert plan_vm.current_page == 0
+        assert 0 in page_indices
+
+    def test_set_plan_model_emits_calibration_changed(
+        self, sample_plan: PlanModel, qapp
+    ) -> None:
+        """set_plan_model emits calibration_changed for active page."""
+        plan_vm = PlanViewModel()
+        cal_received = []
+        plan_vm.calibration_changed.connect(lambda cal: cal_received.append(cal))
+
+        plan_vm.set_plan_model(sample_plan)
+
+        assert len(cal_received) >= 1
+        # First emission should be the calibration of active page (index 0)
+        assert cal_received[0] is not None
+        assert cal_received[0].pixels_per_meter == 150.0
+
+    def test_set_plan_model_empty_pages(
+        self, qapp
+    ) -> None:
+        """set_plan_model with empty PlanModel emits pages_changed and calibration_changed(None)."""
+        plan_vm = PlanViewModel()
+        pages_received = []
+        cal_received = []
+        plan_vm.pages_changed.connect(lambda pages: pages_received.append(pages))
+        plan_vm.calibration_changed.connect(lambda cal: cal_received.append(cal))
+
+        plan_vm.set_plan_model(PlanModel())
+
+        assert len(pages_received) == 1
+        assert len(pages_received[0]) == 0
+        # calibration_changed emitted with None for empty plan
+        assert any(c is None for c in cal_received)
+
+    def test_request_page_render_emits_pixmap(
+        self, sample_plan: PlanModel, tmp_path: Path, qapp
+    ) -> None:
+        """request_page_render emits page_rendered with QPixmap."""
+        from PySide6.QtGui import QPixmap
+
+        plan_vm = PlanViewModel()
+
+        # Create a dummy PDF for rendering
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page(width=200, height=200)
+        pdf_path = tmp_path / "test.pdf"
+        doc.save(str(pdf_path))
+        doc.close()
+
+        # Set up renderer
+        from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
+
+        renderer = PlanRenderer(str(pdf_path))
+        plan_vm.plan_renderer = renderer
+
+        # Set plan model with the PDF
+        plan = PlanModel(
+            pages=[PageModel(source_path="test.pdf", page_index=0, order=0)],
+            active_page_index=0,
+        )
+        plan_vm.set_plan_model(plan)
+
+        pixmaps = []
+        plan_vm.pixmap_ready.connect(lambda pm: pixmaps.append(pm))
+
+        plan_vm.request_page_render(0)
+
+        assert len(pixmaps) == 1
+        assert isinstance(pixmaps[0], QPixmap)
+        assert not pixmaps[0].isNull()
+
+        renderer.close()
+
+    def test_full_save_load_ui_sync(
+        self,
+        persistence: PersistenceService,
+        sample_plan: PlanModel,
+        tmp_path: Path,
+        qapp,
+    ) -> None:
+        """Full cycle: save project → load → PlanViewModel reflects correct state."""
+        project_path = tmp_path / "test_project.hpmpj"
+        project = ProjectModel.create_empty(project_path)
+
+        # Save
+        persistence.save_project(project)
+        persistence.save_plan_model(sample_plan, tmp_path)
+
+        # Load
+        loaded_plan = persistence.load_plan_model(tmp_path)
+        assert loaded_plan is not None
+
+        plan_vm = PlanViewModel()
+        pages_received = []
+        cal_received = []
+        page_indices = []
+        plan_vm.pages_changed.connect(lambda pages: pages_received.append(pages))
+        plan_vm.calibration_changed.connect(lambda cal: cal_received.append(cal))
+        plan_vm.page_changed.connect(lambda idx: page_indices.append(idx))
+
+        plan_vm.set_plan_model(loaded_plan)
+
+        # Sidebar populated
+        assert len(pages_received) == 1
+        assert len(pages_received[0]) == 2
+
+        # Active page highlighted
+        assert plan_vm.current_page == 0
+        assert 0 in page_indices
+
+        # Calibration shown for active page
+        cal = plan_vm.calibration
+        assert cal is not None
+        assert cal.pixels_per_meter == 150.0
+        assert cal.verified is True

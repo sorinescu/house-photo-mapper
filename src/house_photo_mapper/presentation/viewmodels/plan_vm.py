@@ -156,6 +156,11 @@ class PlanViewModel(QtSafeViewModel):
         self._initial_fit_done = False
         self.page_changed.emit(index)
 
+        # Emit calibration_changed for the newly active page
+        sorted_pages = self._plan_model.get_sorted_pages()
+        if 0 <= index < len(sorted_pages):
+            self.calibration_changed.emit(sorted_pages[index].calibration)
+
         # Render page if renderer available
         if self._plan_renderer is not None:
             page = sorted_pages[index]
@@ -166,6 +171,30 @@ class PlanViewModel(QtSafeViewModel):
                 self.pixmap_ready.emit(pixmap)
             except Exception as e:
                 self.error_occurred.emit(f"Failed to render page: {e}")
+
+    def request_page_render(self, page_index: int) -> None:
+        """Render a specific page and emit page_rendered signal.
+
+        Uses PlanRenderer to render the page at 150 DPI and emits
+        pixmap_ready with the resulting QPixmap.
+
+        Args:
+            page_index: Index in sorted page list to render.
+        """
+        if self._plan_model is None or self._plan_renderer is None:
+            return
+
+        sorted_pages = self._plan_model.get_sorted_pages()
+        if not 0 <= page_index < len(sorted_pages):
+            return
+
+        try:
+            page = sorted_pages[page_index]
+            pixmap = self._plan_renderer.render_page(page.page_index, dpi=150)
+            self._current_pixmap = pixmap
+            self.pixmap_ready.emit(pixmap)
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to render page: {e}")
 
     @Slot(float)
     def set_zoom(self, factor: float) -> None:
