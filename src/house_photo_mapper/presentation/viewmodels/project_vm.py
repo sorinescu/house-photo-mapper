@@ -183,6 +183,11 @@ class ProjectViewModel(QtSafeViewModel):
         self._plan_vm = plan_vm
 
     @property
+    def plan_vm(self) -> "PlanViewModel | None":
+        """Return the PlanViewModel instance (if set)."""
+        return self._plan_vm
+
+    @property
     def plan_model(self) -> PlanModel | None:
         """Get current PlanModel."""
         return self._plan_model

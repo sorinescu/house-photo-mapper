@@ -12,7 +12,7 @@ from house_photo_mapper.infrastructure.qt_patterns import QtSafeViewModel
 from house_photo_mapper.presentation.viewmodels.project_vm import ProjectViewModel
 
 if TYPE_CHECKING:
-    pass
+    from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
 
 
 class MainWindowViewModel(QtSafeViewModel):
@@ -54,6 +54,11 @@ class MainWindowViewModel(QtSafeViewModel):
     def project_vm(self) -> ProjectViewModel:
         """Return the ProjectViewModel instance."""
         return self._project_vm
+
+    @property
+    def plan_vm(self) -> "PlanViewModel | None":
+        """Return the PlanViewModel from ProjectViewModel (may be None)."""
+        return self._project_vm.plan_vm
 
     @property
     def project(self) -> ProjectModel | None:
@@ -147,6 +152,42 @@ class MainWindowViewModel(QtSafeViewModel):
         if path:
             self._persistence.set_last_opened_directory(str(Path(path).parent))
             self._project_vm.save_project_as(path)
+
+    @Slot()
+    def import_plan(self) -> None:
+        """Show Import Plan dialog and route to PlanViewModel by file type.
+
+        Supports PDF, PNG, JPG, JPEG files. Works without a project loaded
+        (standalone import). Routes to load_plan_from_pdf or load_plan_from_image
+        based on file extension.
+        """
+        plan_vm = self.plan_vm
+        if plan_vm is None:
+            self.status_message_changed.emit("No plan viewport available")
+            return
+
+        directory = self._persistence.get_last_opened_directory()
+        path, _ = QFileDialog.getOpenFileName(
+            None,
+            "Import Plan",
+            directory,
+            "Plans (*.pdf *.png *.jpg *.jpeg);;PDF Files (*.pdf);;Images (*.png *.jpg *.jpeg)",
+        )
+        if not path:
+            return
+
+        try:
+            suffix = Path(path).suffix.lower()
+            if suffix == ".pdf":
+                plan_vm.load_plan_from_pdf(path)
+            elif suffix in (".png", ".jpg", ".jpeg"):
+                plan_vm.load_plan_from_image(path)
+            else:
+                self.status_message_changed.emit(f"Unsupported file type: {suffix}")
+                return
+            self._persistence.set_last_opened_directory(str(Path(path).parent))
+        except Exception as e:
+            self.status_message_changed.emit(f"Failed to import plan: {e}")
 
     @Slot(str)
     def open_recent_project(self, path: str) -> None:

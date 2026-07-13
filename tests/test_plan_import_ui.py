@@ -118,15 +118,16 @@ class TestMainWindowViewModelImportPlan:
         vm, _, mock_plan_vm, _ = self._make_vm()
         mock_plan_vm.load_plan_from_pdf.side_effect = RuntimeError("bad file")
 
+        received = []
+        vm.status_message_changed.connect(lambda msg: received.append(msg))
+
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
             mock_dialog.getOpenFileName.return_value = ("/tmp/plan.pdf", "")
-            with patch.object(vm.status_message_changed, "emit") as mock_emit:
-                vm.import_plan()
-                mock_emit.assert_called()
-                error_msg = mock_emit.call_args[0][0]
-                assert "Failed to import plan" in error_msg
+            vm.import_plan()
+            assert len(received) == 1
+            assert "Failed to import plan" in received[0]
 
     def test_import_plan_sets_last_opened_directory(self):
         """import_plan updates last opened directory after successful import."""
