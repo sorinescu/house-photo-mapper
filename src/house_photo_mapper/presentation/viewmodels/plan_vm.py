@@ -13,7 +13,6 @@ from house_photo_mapper.infrastructure.qt_patterns import QtSafeViewModel
 
 if TYPE_CHECKING:
     from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
-    from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 
 
 class PlanViewModel(QtSafeViewModel):
@@ -48,7 +47,6 @@ class PlanViewModel(QtSafeViewModel):
         self._zoom: float = 1.0
         self._rotation: int = 0
         self._initial_fit_done: bool = False
-        self._annotation_vm: AnnotationViewModel | None = None
 
     @property
     def plan_model(self) -> PlanModel | None:
@@ -343,19 +341,6 @@ class PlanViewModel(QtSafeViewModel):
             plan_view: PlanView instance (or None to clear).
         """
         self._plan_view = plan_view
-
-    def set_annotation_vm(self, annotation_vm: "AnnotationViewModel") -> None:
-        """Set the AnnotationViewModel reference.
-
-        Args:
-            annotation_vm: AnnotationViewModel instance.
-        """
-        self._annotation_vm = annotation_vm
-
-    @property
-    def annotation_vm(self) -> "AnnotationViewModel | None":
-        """Get the AnnotationViewModel reference."""
-        return self._annotation_vm
 
     def load_plan_from_pdf(self, pdf_path: str) -> None:
         """Load a PDF plan and create PlanModel with pages.
