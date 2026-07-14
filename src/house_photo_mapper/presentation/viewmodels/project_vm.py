@@ -149,6 +149,10 @@ class ProjectViewModel(QtSafeViewModel):
 
         try:
             self._persistence.save_project_as(self._project, path)
+            # Save PlanModel if available
+            project_dir = Path(path).parent
+            if self._plan_model is not None:
+                self._persistence.save_plan_model(self._plan_model, project_dir)
             self._dirty = False
             self._emit_project_changed()
             self._emit_dirty_changed()

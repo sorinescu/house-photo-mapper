@@ -159,6 +159,16 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
+        # Close Project
+        self._close_action = QAction("&Close Project", self)
+        self._close_action.setShortcut(QKeySequence("Ctrl+W"))
+        self._close_action.setStatusTip("Close the current project")
+        self._close_action.triggered.connect(self._close_project)
+        self._close_action.setEnabled(False)
+        menu.addAction(self._close_action)
+
+        menu.addSeparator()
+
         # Recent projects submenu
         self._recent_menu = menu.addMenu("Recent &Projects")
         self._vm.recent_projects_changed.connect(self._update_recent_menu)
@@ -307,6 +317,7 @@ class MainWindow(QMainWindow):
         has_project = project_vm.project is not None
         self._save_action.setEnabled(has_project and project_vm.dirty)
         self._save_as_action.setEnabled(has_project)
+        self._close_action.setEnabled(has_project)
         self._tb_save.setEnabled(has_project and project_vm.dirty)
 
     def _update_recent_menu(self, recent_projects: list[str]) -> None:
@@ -337,6 +348,32 @@ class MainWindow(QMainWindow):
             "<p>Document buildings with photos and annotations.</p>"
             "<p>Built with Python, PySide6, and uv.</p>",
         )
+
+    def _close_project(self) -> None:
+        """Close the current project after prompting to save if needed."""
+        # Check if there are unsaved changes
+        if self._vm.project_vm and self._vm.project_vm.dirty:
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "Project has unsaved changes. Save before closing?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+            )
+            if reply == QMessageBox.StandardButton.Save:
+                self._vm.save_project()
+            elif reply == QMessageBox.StandardButton.Cancel:
+                return
+
+        # Close the project
+        self._vm.project_vm.close_project()
+
+        # Clear the sidebar and plan view
+        self._sidebar.clear()
+
+        # Reset window title
+        self.setWindowTitle("HousePhotoMapper")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Save window state on close."""
