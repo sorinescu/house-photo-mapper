@@ -122,15 +122,16 @@ Plans:
   5. Arrow keys navigate previous/next photo; Space confirms annotation; Delete removes selection; Ctrl+S saves
   6. User completes a full annotation (marker + direction + cone + polygon + metadata) in ≤3 clicks
 
-**Plans**: 5 plans
+**Plans**: 6 plans
 
 Plans:
 
-- [ ] 04-01: Annotation graphics items — CameraMarker, DirectionArrow, ViewingCone, VisibleAreaPolygon (QGraphicsItem)
-- [ ] 04-02: AnnotationVM — creation flow, floor selection, metadata form (title, description, tags)
-- [ ] 04-03: QUndoStack commands — MoveMarker, RotateArrow, ResizeCone, EditPolygon, DeleteAnnotation, with mergeWith compression
-- [ ] 04-04: Keyboard shortcuts — QShortcut with context, configurable keymap, QAction for menu items
-- [ ] 04-05: Photo-annotation binding — arrow keys nav, Space to place, selection sync between photo browser and plan
+- [x] 04-01: Annotation graphics items — CameraMarker, DirectionArrow, ViewingCone, VisibleAreaPolygon (QGraphicsItem)
+- [x] 04-02: AnnotationVM — creation flow, floor selection, metadata form (title, description, tags)
+- [x] 04-03: QUndoStack commands — MoveMarker, RotateArrow, ResizeCone, EditPolygon, DeleteAnnotation, with mergeWith compression
+- [x] 04-04: Keyboard shortcuts — QShortcut with context, configurable keymap, QAction for menu items
+- [x] 04-05: Photo-annotation binding — arrow keys nav, Space to place, selection sync between photo browser and plan
+- [x] 04-06: Annotation UI integration — menu, toolbar, properties panel, plan view mouse events, photo sync (gap closure)
 
 ### Phase 5: Project Persistence & Performance
 
@@ -215,7 +216,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Core Architecture | 5/5 | Complete    | 2026-07-13 |
 | 2. Plan System | 8/8 | Complete | 2026-07-14 |
 | 3. Photo System | 7/7 | Complete | 2026-07-14 |
-| 4. Annotation Tools | 0/5 | Planning | - |
+| 4. Annotation Tools | 6/6 | Complete | 2026-07-14 |
 | 5. Project Persistence & Performance | 0/TBD | Not started | - |
 | 6. Report Generation | 0/TBD | Not started | - |
 | 7. Polish, Packaging & Ship | 0/TBD | Not started | - |
