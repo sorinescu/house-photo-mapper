@@ -268,13 +268,20 @@ class PlanGraphicsView(QGraphicsView):
         self._pan_start = QPointF()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        """Handle wheel event: Ctrl+wheel zooms, else passes to parent."""
+        """Handle wheel event: Ctrl+wheel zooms, two-finger scroll pans (trackpad)."""
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             # Zoom factor 1.15 per step (smooth, not too fast)
             factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
             self.scale(factor, factor)
             event.accept()
+        elif event.pixelDelta().x() != 0 or event.pixelDelta().y() != 0:
+            # Trackpad two-finger drag: pixelDelta gives smooth scroll values
+            delta = event.pixelDelta()
+            t = self.transform()
+            self.translate(delta.x() / t.m11(), delta.y() / t.m22())
+            event.accept()
         else:
+            # Mouse wheel without Ctrl: scroll normally
             super().wheelEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
