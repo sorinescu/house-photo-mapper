@@ -101,7 +101,7 @@ Plans:
 Plans:
 
 - [x] 03-01: Photo models & dependencies — PhotoModel, ExifModel, DuplicateGroup, install imagehash + pillow-heif
-- [ ] 03-02: Photo import pipeline — PhotoImporter service, drag-drop handler, recursive folder scan
+- [x] 03-02: Photo import pipeline — PhotoImporter service, drag-drop handler, recursive folder scan
 - [ ] 03-03: EXIF extraction — ExifExtractor service, GPS rational conversion, orientation handling
 - [ ] 03-04: Thumbnail system — ThumbnailGenerator with QThreadPool, LRU memory cache, disk cache
 - [ ] 03-05: Duplicate detection — DuplicateDetector with dHash, review dialog
