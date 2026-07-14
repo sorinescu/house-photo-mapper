@@ -152,8 +152,8 @@ class MainWindow(QMainWindow):
         # Import Photos
         import_photos_action = QAction("Import &Photos...", self)
         import_photos_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
-        import_photos_action.setStatusTip("Import photos from folder")
-        import_photos_action.triggered.connect(self._vm.import_photos_from_folder)
+        import_photos_action.setStatusTip("Import photo files")
+        import_photos_action.triggered.connect(self._vm.import_photo_files)
         menu.addAction(import_photos_action)
 
         menu.addSeparator()
@@ -289,6 +289,10 @@ class MainWindow(QMainWindow):
         self._tb_import = QAction("Import Plan", self)
         self._tb_import.triggered.connect(self._vm.import_plan)
         self._toolbar.addAction(self._tb_import)
+
+        self._tb_import_photos = QAction("Import Photos", self)
+        self._tb_import_photos.triggered.connect(self._vm.import_photo_files)
+        self._toolbar.addAction(self._tb_import_photos)
 
     def _create_status_bar(self) -> None:
         """Create the status bar."""

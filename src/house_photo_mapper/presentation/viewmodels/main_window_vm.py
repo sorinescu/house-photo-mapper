@@ -200,21 +200,10 @@ class MainWindowViewModel(QtSafeViewModel):
             self.status_message_changed.emit("No project open to import photos into")
             return
 
-        try:
-            from house_photo_mapper.domain.services.photo_importer import import_photos
-
-            project_dir = Path(self._project_vm.project.path).parent
-            photo_paths = [Path(p) for p in paths]
-            photos = import_photos(photo_paths, project_dir)
-
-            # Add photos to project (convert to dict for storage)
-            for photo in photos:
-                self._project_vm.project.photos.append(photo.to_project_json())
-
-            self._project_vm.mark_dirty()
-            self.status_message_changed.emit(f"Imported {len(photos)} photos")
-        except Exception as e:
-            self.status_message_changed.emit(f"Failed to import photos: {e}")
+        # Delegate to PhotoViewModel which handles browser updates
+        project_dir = str(Path(self._project_vm.project.path).parent)
+        self._project_vm.photo_vm.import_photos(paths, project_dir)
+        self._project_vm.mark_dirty()
 
     @Slot()
     def import_photos_from_folder(self) -> None:
@@ -233,24 +222,42 @@ class MainWindowViewModel(QtSafeViewModel):
             return
 
         try:
-            from house_photo_mapper.domain.services.photo_importer import (
-                import_photos,
-                scan_folder_recursive,
-            )
+            from house_photo_mapper.domain.services.photo_importer import scan_folder_recursive
 
-            project_dir = Path(self._project_vm.project.path).parent
-            photo_paths = list(scan_folder_recursive(Path(folder)))
-            photos = import_photos(photo_paths, project_dir)
+            project_dir = str(Path(self._project_vm.project.path).parent)
+            photo_paths = [str(p) for p in scan_folder_recursive(Path(folder))]
 
-            # Add photos to project (convert to dict for storage)
-            for photo in photos:
-                self._project_vm.project.photos.append(photo.to_project_json())
-
+            # Delegate to PhotoViewModel which handles browser updates
+            self._project_vm.photo_vm.import_photos(photo_paths, project_dir)
             self._project_vm.mark_dirty()
             self._persistence.set_last_opened_directory(folder)
-            self.status_message_changed.emit(f"Imported {len(photos)} photos from folder")
+            self.status_message_changed.emit(f"Imported {len(photo_paths)} photos from folder")
         except Exception as e:
             self.status_message_changed.emit(f"Failed to import photos: {e}")
+
+    @Slot()
+    def import_photo_files(self) -> None:
+        """Show file dialog and import selected photo files."""
+        if self._project_vm.project is None:
+            self.status_message_changed.emit("No project open to import photos into")
+            return
+
+        directory = self._persistence.get_last_opened_directory()
+        paths, _ = QFileDialog.getOpenFileNames(
+            None,
+            "Import Photos",
+            directory,
+            "Images (*.jpg *.jpeg *.png *.heic *.heif *.tiff *.tif *.bmp);;All Files (*)",
+        )
+        if not paths:
+            return
+
+        # Delegate to PhotoViewModel which handles browser updates
+        project_dir = str(Path(self._project_vm.project.path).parent)
+        self._project_vm.photo_vm.import_photos(paths, project_dir)
+        self._project_vm.mark_dirty()
+        self._persistence.set_last_opened_directory(str(Path(paths[0]).parent))
+        self.status_message_changed.emit(f"Imported {len(paths)} photos")
 
     @Slot(str)
     def open_recent_project(self, path: str) -> None:
