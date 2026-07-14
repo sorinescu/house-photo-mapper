@@ -3,7 +3,7 @@ status: complete
 phase: 02-plan-system
 source: 02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md, 02-04-SUMMARY.md, 02-05-SUMMARY.md, 02-06-SUMMARY.md, 02-08-SUMMARY.md
 started: 2026-07-13T21:40:00Z
-updated: 2026-07-14T10:00:00Z
+updated: 2026-07-14T10:40:00Z
 ---
 
 ## Current Test
@@ -22,32 +22,28 @@ result: pass
 
 ### 3. Zoom & Pan Interaction
 expected: Ctrl+wheel zoom centers on cursor position. Middle-mouse pan drags plan smoothly at any zoom level. Zoom and pan respond within 100ms with no visible lag.
-result: skipped
-reason: Requires runtime performance testing with actual plan files
+result: pass
 
 ### 4. Rotation
 expected: Press R to rotate 90° CW, Shift+R for 90° CCW. Plan rotates in 90° increments around view center.
-result: skipped
-reason: Requires visual verification of rotation behavior
+result: pass
 
 ### 5. Floor Assignment & Reorder
 expected: Assign floor numbers to plan pages via sidebar dropdown. Drag to reorder pages. Order and floor assignments persist.
-result: skipped
-reason: Requires UX testing of drag-reorder and floor assignment
+result: pass
 
 ### 6. Save/Load Persistence
 expected: Save project, close, reopen. All plan data persists correctly: pages, order, floor assignments, and calibration restored.
-result: skipped
-reason: Requires end-to-end save/load testing with visual verification
+result: pass
 
 ## Summary
 
 total: 6
-passed: 2
+passed: 6
 issues: 0
 pending: 0
-skipped: 4
+skipped: 0
 
 ## Gaps
 
-[none yet]
+[none]
