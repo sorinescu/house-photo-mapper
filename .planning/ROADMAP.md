@@ -105,7 +105,7 @@ Plans:
 - [x] 03-03: EXIF extraction — ExifExtractor service, GPS rational conversion, orientation handling
 - [x] 03-04: Thumbnail system — ThumbnailGenerator with QThreadPool, LRU memory cache, disk cache
 - [x] 03-05: Duplicate detection — DuplicateDetector with dHash, review dialog
-- [ ] 03-06: PhotoBrowserVM & UI — PhotoViewModel, PhotoBrowser, PhotoMetadataPanel, MainWindow integration
+- [x] 03-06: PhotoBrowserVM & UI — PhotoViewModel, PhotoBrowser, PhotoMetadataPanel, MainWindow integration
 - [ ] 03-07: Photo persistence & verification — photos.json persistence, full success criteria verification
 
 ### Phase 4: Annotation Tools
