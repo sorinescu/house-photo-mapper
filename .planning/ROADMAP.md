@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Core Architecture** - Project scaffolding, MVVM skeleton, coordinate system, macOS app bundle (completed 2026-07-13)
 - [x] **Phase 2: Plan System** - PDF/PNG/JPG import, multi-page navigation, zoom/pan/rotate, tile pyramid rendering (completed 2026-07-14)
-- [ ] **Phase 3: Photo System** - Drag-drop/folder import, EXIF extraction, duplicate detection, lazy-loaded thumbnails
+- [x] **Phase 3: Photo System** - Drag-drop/folder import, EXIF extraction, duplicate detection, lazy-loaded thumbnails (completed 2026-07-14)
 - [ ] **Phase 4: Annotation Tools** - Camera marker, direction arrow, viewing cone, visible polygon, metadata, undo/redo, shortcuts
 - [ ] **Phase 5: Project Persistence & Performance** - JSON serialization, auto-save, crash recovery, dark/light mode, <100ms viewport
 - [ ] **Phase 6: Report Generation** - Professional PDF reports with photo, plan snippet, camera symbol, cone, metadata, figure numbers
@@ -106,7 +106,7 @@ Plans:
 - [x] 03-04: Thumbnail system — ThumbnailGenerator with QThreadPool, LRU memory cache, disk cache
 - [x] 03-05: Duplicate detection — DuplicateDetector with dHash, review dialog
 - [x] 03-06: PhotoBrowserVM & UI — PhotoViewModel, PhotoBrowser, PhotoMetadataPanel, MainWindow integration
-- [ ] 03-07: Photo persistence & verification — photos.json persistence, full success criteria verification
+- [x] 03-07: Photo persistence & verification — photos.json persistence, full success criteria verification
 
 ### Phase 4: Annotation Tools
 
