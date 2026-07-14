@@ -122,7 +122,7 @@ Plans:
   5. Arrow keys navigate previous/next photo; Space confirms annotation; Delete removes selection; Ctrl+S saves
   6. User completes a full annotation (marker + direction + cone + polygon + metadata) in ≤3 clicks
 
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
 
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Core Architecture | 5/5 | Complete    | 2026-07-13 |
 | 2. Plan System | 8/8 | Complete | 2026-07-14 |
 | 3. Photo System | 7/7 | Complete | 2026-07-14 |
-| 4. Annotation Tools | 0/TBD | Not started | - |
+| 4. Annotation Tools | 0/5 | Planning | - |
 | 5. Project Persistence & Performance | 0/TBD | Not started | - |
 | 6. Report Generation | 0/TBD | Not started | - |
 | 7. Polish, Packaging & Ship | 0/TBD | Not started | - |
