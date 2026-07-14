@@ -12,6 +12,7 @@ from house_photo_mapper.infrastructure.qt_patterns import QtSafeViewModel
 
 if TYPE_CHECKING:
     from house_photo_mapper.domain.services.persistence import PersistenceService
+    from house_photo_mapper.presentation.viewmodels.photo_vm import PhotoViewModel
     from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
 
 
@@ -44,6 +45,7 @@ class ProjectViewModel(QtSafeViewModel):
         self._dirty = False
         self._plan_vm: PlanViewModel | None = None
         self._plan_model: PlanModel | None = None
+        self._photo_vm: PhotoViewModel | None = None
 
     @property
     def project(self) -> ProjectModel | None:
@@ -89,7 +91,8 @@ class ProjectViewModel(QtSafeViewModel):
     def open_project(self, path: str) -> None:
         """Open an existing project from the given path.
 
-        Loads both .hpmpj and plans.json. Injects PlanModel into PlanViewModel.
+        Loads both .hpmpj, plans.json, and photos.json. Injects PlanModel
+        into PlanViewModel and populates PhotoViewModel.
 
         Args:
             path: File path to the .hpmpj project file.
@@ -98,8 +101,9 @@ class ProjectViewModel(QtSafeViewModel):
             self._project = self._persistence.load_project(path)
             self._dirty = False
 
-            # Load PlanModel from plans.json
             project_dir = Path(path).parent
+
+            # Load PlanModel from plans.json
             self._plan_model = self._persistence.load_plan_model(project_dir)
             if self._plan_model is None:
                 self._plan_model = PlanModel()
@@ -107,6 +111,17 @@ class ProjectViewModel(QtSafeViewModel):
             # Inject into PlanViewModel if available
             if self._plan_vm is not None:
                 self._plan_vm.plan_model = self._plan_model
+
+            # Load photos from photos.json
+            if self._photo_vm is not None:
+                photos = self._persistence.load_photo_model(project_dir)
+                if photos:
+                    # Populate PhotoViewModel
+                    self._photo_vm._photos = photos
+                    # Generate thumbnails for loaded photos
+                    for photo in photos:
+                        full_path = str(project_dir / photo.path)
+                        self._photo_vm._thumbnail_generator.generate(full_path)
 
             self._emit_project_changed()
             self._emit_dirty_changed()
@@ -127,10 +142,16 @@ class ProjectViewModel(QtSafeViewModel):
 
         try:
             self._persistence.save_project(self._project)
-            # Save PlanModel if available
             project_dir = self._project_dir()
+
+            # Save PlanModel if available
             if project_dir and self._plan_model is not None:
                 self._persistence.save_plan_model(self._plan_model, project_dir)
+
+            # Save photos if available
+            if project_dir and self._photo_vm is not None:
+                self._persistence.save_photo_model(self._photo_vm.photos, project_dir)
+
             self._dirty = False
             self._emit_dirty_changed()
         except Exception as e:
@@ -149,10 +170,16 @@ class ProjectViewModel(QtSafeViewModel):
 
         try:
             self._persistence.save_project_as(self._project, path)
-            # Save PlanModel if available
             project_dir = Path(path).parent
+
+            # Save PlanModel if available
             if self._plan_model is not None:
                 self._persistence.save_plan_model(self._plan_model, project_dir)
+
+            # Save photos if available
+            if self._photo_vm is not None:
+                self._persistence.save_photo_model(self._photo_vm.photos, project_dir)
+
             self._dirty = False
             self._emit_project_changed()
             self._emit_dirty_changed()
@@ -186,10 +213,23 @@ class ProjectViewModel(QtSafeViewModel):
         """
         self._plan_vm = plan_vm
 
+    def set_photo_vm(self, photo_vm: "PhotoViewModel") -> None:
+        """Set the PhotoViewModel reference for photo persistence coordination.
+
+        Args:
+            photo_vm: PhotoViewModel instance to coordinate with.
+        """
+        self._photo_vm = photo_vm
+
     @property
     def plan_vm(self) -> "PlanViewModel | None":
         """Return the PlanViewModel instance (if set)."""
         return self._plan_vm
+
+    @property
+    def photo_vm(self) -> "PhotoViewModel | None":
+        """Return the PhotoViewModel instance (if set)."""
+        return self._photo_vm
 
     @property
     def plan_model(self) -> PlanModel | None:

@@ -7,6 +7,7 @@ from typing import Any
 
 from PySide6.QtCore import QSettings
 
+from house_photo_mapper.domain.models.photo import PhotoModel
 from house_photo_mapper.domain.models.plan import PlanModel
 from house_photo_mapper.domain.models.project import ProjectModel
 
@@ -118,6 +119,50 @@ class PersistenceService:
         if not plan_path.exists():
             return None
         return PlanModel.model_validate_json(plan_path.read_text())
+
+    def save_photo_model(self, photos: list[PhotoModel], project_dir: Path) -> None:
+        """Save photo list to project_dir/photos.json atomically.
+
+        Args:
+            photos: List of PhotoModel instances to save.
+            project_dir: Project directory containing photos.json.
+
+        Raises:
+            OSError: If write fails.
+        """
+        photos_path = project_dir / "photos.json"
+        photos_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Convert to JSON-compatible dicts
+        photos_data = [photo.to_project_json() for photo in photos]
+
+        # Atomic write: write to .tmp then rename
+        import json
+
+        tmp_path = photos_path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(photos_data, indent=2))
+        tmp_path.replace(photos_path)
+
+    def load_photo_model(self, project_dir: Path) -> list[PhotoModel] | None:
+        """Load photo list from project_dir/photos.json.
+
+        Args:
+            project_dir: Project directory containing photos.json.
+
+        Returns:
+            List of PhotoModel instances, or None if file doesn't exist.
+
+        Raises:
+            ValidationError: If JSON doesn't match PhotoModel schema.
+        """
+        photos_path = project_dir / "photos.json"
+        if not photos_path.exists():
+            return None
+
+        import json
+
+        photos_data = json.loads(photos_path.read_text())
+        return [PhotoModel.from_project_json(data) for data in photos_data]
 
     def get_recent_projects(self) -> list[str]:
         """Get list of recent project paths (max 10)."""

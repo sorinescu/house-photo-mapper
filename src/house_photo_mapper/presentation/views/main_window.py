@@ -73,8 +73,9 @@ class MainWindow(QMainWindow):
         self._plan_vm = PlanViewModel()
         self._vm.project_vm.set_plan_vm(self._plan_vm)
 
-        # Create PhotoViewModel
+        # Create PhotoViewModel and wire to ProjectViewModel
         self._photo_vm = PhotoViewModel()
+        self._vm.project_vm.set_photo_vm(self._photo_vm)
 
         self.setWindowTitle("HousePhotoMapper")
         self.resize(1200, 800)
