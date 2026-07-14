@@ -13,6 +13,7 @@ from house_photo_mapper.infrastructure.qt_patterns import QtSafeViewModel
 
 if TYPE_CHECKING:
     from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
+    from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 
 
 class PlanViewModel(QtSafeViewModel):
@@ -47,11 +48,20 @@ class PlanViewModel(QtSafeViewModel):
         self._zoom: float = 1.0
         self._rotation: int = 0
         self._initial_fit_done: bool = False
+        self._annotation_vm: AnnotationViewModel | None = None
 
     @property
     def plan_model(self) -> PlanModel | None:
         """Get current plan model."""
         return self._plan_model
+
+    def set_annotation_vm(self, vm: AnnotationViewModel) -> None:
+        """Set AnnotationViewModel reference for page-change notification.
+
+        Args:
+            vm: AnnotationViewModel to notify on page changes.
+        """
+        self._annotation_vm = vm
 
     @plan_model.setter
     def plan_model(self, model: PlanModel | None) -> None:
@@ -206,6 +216,12 @@ class PlanViewModel(QtSafeViewModel):
         self._current_page_index = index
         self._initial_fit_done = False
         self.page_changed.emit(index)
+
+        # Notify annotation VM of page change
+        if self._annotation_vm is not None:
+            sorted_pages = self._plan_model.get_sorted_pages()
+            if 0 <= index < len(sorted_pages):
+                self._annotation_vm.set_current_page(sorted_pages[index].page_index)
 
         # Emit calibration_changed for the newly active page
         sorted_pages = self._plan_model.get_sorted_pages()
