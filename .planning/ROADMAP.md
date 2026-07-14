@@ -126,7 +126,7 @@ Plans:
 
 Plans:
 
-- [x] 04-01: Annotation graphics items — CameraMarker, DirectionArrow, ViewingCone, VisibleAreaPolygon (QGraphicsItem)
+- [ ] 04-01: Annotation graphics items — CameraMarker, DirectionArrow, ViewingCone, VisibleAreaPolygon (QGraphicsItem)
 - [ ] 04-02: AnnotationVM — creation flow, floor selection, metadata form (title, description, tags)
 - [ ] 04-03: QUndoStack commands — MoveMarker, RotateArrow, ResizeCone, EditPolygon, DeleteAnnotation, with mergeWith compression
 - [ ] 04-04: Keyboard shortcuts — QShortcut with context, configurable keymap, QAction for menu items
@@ -215,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Core Architecture | 5/5 | Complete    | 2026-07-13 |
 | 2. Plan System | 8/8 | Complete | 2026-07-14 |
 | 3. Photo System | 7/7 | Complete | 2026-07-14 |
-| 4. Annotation Tools | 1/5 | In progress | - |
+| 4. Annotation Tools | 0/5 | Planning | - |
 | 5. Project Persistence & Performance | 0/TBD | Not started | - |
 | 6. Report Generation | 0/TBD | Not started | - |
 | 7. Polish, Packaging & Ship | 0/TBD | Not started | - |
