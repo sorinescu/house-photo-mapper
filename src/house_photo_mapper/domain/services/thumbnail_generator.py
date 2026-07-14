@@ -134,22 +134,35 @@ class ThumbnailGenerator(QObject):
 
         return None
 
-    def generate(self, path: str, target_size: tuple[int, int] = (200, 200)) -> None:
+    def generate(
+        self,
+        key: str,
+        file_path: str | None = None,
+        target_size: tuple[int, int] = (200, 200),
+    ) -> None:
         """Queue thumbnail generation for a path.
 
         Args:
-            path: Source image path.
+            key: Cache key (typically relative path).
+            file_path: Actual file path to read from (defaults to key).
             target_size: Target thumbnail size.
         """
         # Skip if already cached or pending
-        if path in self._cache or path in self._pending:
+        if key in self._cache or key in self._pending:
             return
 
-        self._pending.add(path)
+        self._pending.add(key)
 
-        worker = ThumbnailWorker(path, target_size)
-        worker.signals.thumbnail_ready.connect(self._on_thumbnail_ready)
-        worker.signals.thumbnail_error.connect(self._on_thumbnail_error)
+        # Use file_path if provided, otherwise use key as file path
+        actual_path = file_path if file_path else key
+
+        worker = ThumbnailWorker(actual_path, target_size)
+        worker.signals.thumbnail_ready.connect(
+            lambda path, data: self._on_thumbnail_ready(key, data)
+        )
+        worker.signals.thumbnail_error.connect(
+            lambda path, error: self._on_thumbnail_error(key, error)
+        )
 
         QThreadPool.globalInstance().start(worker)
 

@@ -77,12 +77,12 @@ class PhotoViewModel(QtSafeViewModel):
             self._photos.append(photo)
             self.photo_added.emit(photo)
 
-            # Generate thumbnail
+            # Generate thumbnail using relative path as key
             if project_dir:
                 full_path = str(Path(project_dir) / photo.path)
             else:
                 full_path = photo.path
-            self._thumbnail_generator.generate(full_path)
+            self._thumbnail_generator.generate(photo.path, full_path)
 
         # Detect duplicates
         if len(self._photos) > 1:
