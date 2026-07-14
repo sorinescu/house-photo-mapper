@@ -49,23 +49,19 @@ class ThumbnailWorker(QtSafeRunnable):
                 # Resize with high-quality resampling
                 img.thumbnail(self.target_size, Image.Resampling.LANCZOS)
 
-                # Convert to QImage
-                if img.mode == "RGBA":
-                    data = img.tobytes("raw", "RGBA")
-                    qimage = QImage(
-                        data,
-                        img.width,
-                        img.height,
-                        QImage.Format.Format_RGBA8888,
-                    )
-                else:
-                    data = img.tobytes("raw", "RGB")
-                    qimage = QImage(
-                        data,
-                        img.width,
-                        img.height,
-                        QImage.Format.Format_RGB888,
-                    )
+                # Convert to RGB if necessary (for QImage compatibility)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+
+                # Save to bytes buffer then load into QImage
+                from io import BytesIO
+
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                buffer.seek(0)
+
+                qimage = QImage()
+                qimage.loadFromData(buffer.read())
 
                 # Convert to QPixmap
                 pixmap = QPixmap.fromImage(qimage)
