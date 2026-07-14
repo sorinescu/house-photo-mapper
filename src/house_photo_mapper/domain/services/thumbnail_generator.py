@@ -1,6 +1,7 @@
 """Thumbnail generation service with background workers and caching."""
 
 import hashlib
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -13,7 +14,7 @@ from house_photo_mapper.infrastructure.qt_patterns import QtSafeRunnable
 class ThumbnailSignals(QObject):
     """Signals for thumbnail worker."""
 
-    thumbnail_ready = Signal(str, QPixmap)
+    thumbnail_ready = Signal(str, bytes)  # path, png_data
     thumbnail_error = Signal(str, str)
 
 
@@ -49,24 +50,16 @@ class ThumbnailWorker(QtSafeRunnable):
                 # Resize with high-quality resampling
                 img.thumbnail(self.target_size, Image.Resampling.LANCZOS)
 
-                # Convert to RGB if necessary (for QImage compatibility)
+                # Convert to RGB if necessary
                 if img.mode != "RGB":
                     img = img.convert("RGB")
 
-                # Save to bytes buffer then load into QImage
-                from io import BytesIO
-
+                # Save to bytes buffer
                 buffer = BytesIO()
                 img.save(buffer, format="PNG")
-                buffer.seek(0)
+                png_data = buffer.getvalue()
 
-                qimage = QImage()
-                qimage.loadFromData(buffer.read())
-
-                # Convert to QPixmap
-                pixmap = QPixmap.fromImage(qimage)
-
-                self.signals.thumbnail_ready.emit(self.path, pixmap)
+                self.signals.thumbnail_ready.emit(self.path, png_data)
         except Exception as e:
             self.signals.thumbnail_error.emit(self.path, str(e))
 
@@ -160,9 +153,16 @@ class ThumbnailGenerator(QObject):
 
         QThreadPool.globalInstance().start(worker)
 
-    def _on_thumbnail_ready(self, path: str, pixmap: QPixmap) -> None:
+    @Slot(str, bytes)
+    def _on_thumbnail_ready(self, path: str, png_data: bytes) -> None:
         """Handle completed thumbnail generation."""
         self._pending.discard(path)
+
+        # Convert PNG bytes to QPixmap on main thread
+        qimage = QImage()
+        qimage.loadFromData(png_data)
+        pixmap = QPixmap.fromImage(qimage)
+
         self._add_to_cache(path, pixmap)
 
         if self._disk_cache_dir:
