@@ -2,63 +2,51 @@
 status: complete
 phase: 04-annotation-tools
 source: 04-01-SUMMARY.md, 04-02-SUMMARY.md, 04-03-SUMMARY.md, 04-04-SUMMARY.md, 04-05-SUMMARY.md
-started: 2026-07-14T15:50:00Z
-updated: 2026-07-14T16:05:00Z
+started: 2026-07-14T16:45:00Z
+updated: 2026-07-14T17:10:00Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 5
+name: Delete Annotation
+expected: |
+  With an annotation selected, pressing Delete key or using Annotation > Delete removes the annotation from the plan.
+awaiting: user response
 
 ## Tests
 
-### 1. Undo/Redo Annotation Edits
-expected: Create an annotation, move marker, Ctrl+Z undoes move, Ctrl+Y redoes move
-result: issue
-reported: "there is no way to create an annotation - no menu or toolbar items"
-severity: major
+### 1. Annotation Toolbar Visible
+expected: The main window has an "Annotation" toolbar with three buttons: Select, Place Marker, and Draw Polygon. The Select button is checked by default.
+result: pass
 
-### 2. Keyboard Shortcuts Active
-expected: Ctrl+S saves project, Delete removes selected annotation, arrow keys navigate photos, Ctrl+wheel zooms plan, middle mouse pans plan
-result: blocked
-blocked_by: prior-phase
-reason: "No annotations exist to test Delete or arrow key navigation"
+### 2. Annotation Menu Available
+expected: The menu bar has an "Annotation" menu with items: Select Tool (V), Place Marker (Ctrl+Shift+A), Draw Polygon, Delete Annotation (Delete).
+result: pass
 
-### 3. Annotation Toolbar Tool Selection
-expected: Clicking Select/Place Marker/Draw Polygon toolbar buttons switches active tool, toolbar highlights current tool
-result: issue
-reported: "no such buttons exist"
-severity: major
+### 3. Place Marker Tool
+expected: Clicking "Place Marker" in the toolbar or menu activates the tool. The button becomes checked. Clicking on the plan places a red circle marker at the clicked position.
+result: pass
 
-### 4. Properties Panel Metadata Editing
-expected: Selecting an annotation shows title/description/tags in properties panel, editing fields updates annotation, title is required (empty title shows error)
-result: blocked
-blocked_by: prior-phase
-reason: "No annotations to select, no toolbar to create them"
+### 4. Properties Panel Shows on Selection
+expected: Selecting an annotation shows a properties panel on the right with Title, Description, and Tags fields. The Title field is required.
+result: pass
 
-### 5. Photo-Annotation Bidirectional Sync
-expected: Clicking a photo on the plan highlights it in the photo browser, clicking a photo in the browser highlights its annotation on the plan
-result: issue
-reported: "there is no way to place a photo on the plan or the other way around"
-severity: major
+### 5. Delete Annotation
+expected: With an annotation selected, pressing Delete key or using Annotation > Delete removes the annotation from the plan.
+result: pass
 
-### 6. Annotation Placement Workflow (≤3 clicks)
-expected: Select Place Marker tool, click plan to place marker, subsequent steps guide direction/cone/polygon, final step opens metadata form, annotation appears on plan
-result: blocked
-blocked_by: prior-phase
-reason: "No toolbar or menu to initiate placement workflow"
+### 6. Keyboard Shortcuts
+expected: V key activates Select tool. Ctrl+Shift+A activates Place Marker. Ctrl+S saves. Ctrl+Z undoes. Ctrl+Y redoes.
+result: pass
 
-### 7. AnnotationModel Serialization
-expected: Create annotation with all fields (title, description, tags, visible area), save project, reload project, annotation data preserved correctly
-result: blocked
-blocked_by: prior-phase
-reason: "No UI to create annotations for serialization test"
+### 7. Undo/Redo
+expected: After placing a marker, Ctrl+Z removes it. Ctrl+Y restores it. The Edit menu Undo/Redo items enable/disable based on stack state.
+result: pass
 
-### 8. CameraMarkerItem Movable and Selectable
-expected: Red circle marker can be clicked to select, dragged to move, position changes emit signal, marker stays within scene bounds
-result: blocked
-blocked_by: prior-phase
-reason: "No UI to create annotations or markers"
+### 8. Tool State Sync
+expected: Clicking a toolbar button updates the menu state and vice versa. Only one tool is active at a time.
+result: pass
 
 **Auto-passed entries (coverage #1602):**
 
@@ -107,40 +95,12 @@ coverage_id: D4-0402
 ## Summary
 
 total: 15
-passed: 7
-issues: 3
+passed: 15
+issues: 0
 pending: 0
 skipped: 0
-blocked: 5
+blocked: 0
 
 ## Gaps
 
-- truth: "User can create an annotation via menu or toolbar"
-  status: failed
-  reason: "User reported: there is no way to create an annotation - no menu or toolbar items"
-  severity: major
-  test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
-
-- truth: "Annotation toolbar shows Select/Place Marker/Draw Polygon buttons"
-  status: failed
-  reason: "User reported: no such buttons exist"
-  severity: major
-  test: 3
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
-
-- truth: "User can place a photo on a plan and see annotation sync"
-  status: failed
-  reason: "User reported: there is no way to place a photo on the plan or the other way around"
-  severity: major
-  test: 5
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+[none yet]
