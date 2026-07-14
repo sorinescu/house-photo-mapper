@@ -1,6 +1,7 @@
 """Domain services package."""
 
 from house_photo_mapper.domain.services.coordinate import CoordinateConverter, ViewportContext
+from house_photo_mapper.domain.services.duplicate_detector import detect_duplicates, mark_duplicates
 from house_photo_mapper.domain.services.exif_extractor import extract_exif, get_exif_summary
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import (
@@ -26,4 +27,6 @@ __all__ = [
     "get_exif_summary",
     "ThumbnailGenerator",
     "ThumbnailWorker",
+    "detect_duplicates",
+    "mark_duplicates",
 ]
