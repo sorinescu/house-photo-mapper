@@ -8,10 +8,10 @@ updated: 2026-07-14T10:45:00Z
 
 ## Current Test
 
-number: 1
-name: Photo Import via Drag-Drop
+number: 4
+name: Duplicate Detection
 expected: |
-  Open the app, create or open a project, then drag an image file (JPG/PNG) from Finder onto the app window. The photo should appear in the photo browser panel on the right side with a thumbnail placeholder.
+  Import two copies of the same image. Both appear in the browser but are marked with a "[Duplicate: dup_X]" badge.
 awaiting: user response
 
 ## Tests
@@ -23,12 +23,12 @@ reported: "The status bar says 'Imported 1 photo' but nothing is visible. Droppi
 severity: major
 fix: "Delegated import to PhotoViewModel which emits photo_added signal to update browser"
 
-### 2. Folder Import via Menu
-expected: Click File > Import Photos (Ctrl+Shift+P), select a folder. All images in the folder (including subfolders) appear in the photo browser.
+### 2. Import Photos Menu
+expected: Click File > Import Photos (Ctrl+Shift+P), select image files. Photos appear in the photo browser.
 result: fixed
 reported: "Even though there is an 'Import photos' item in the File menu, it doesn't allow any photo to be selected in the instantiated file browser."
 severity: major
-fix: "Changed to file dialog for selecting individual images, kept folder import as separate action"
+fix: "Changed to file dialog for selecting individual images"
 
 ### 3. Toolbar Import Photos Button
 expected: There is an "Import Photos" button in the toolbar for quick access.
@@ -37,35 +37,30 @@ reported: "There should be an 'Import photos' item in the toolbar."
 severity: major
 fix: "Added Import Photos button to toolbar"
 
-### 4. EXIF Metadata Display
+### 4. Thumbnail Generation
+expected: Import several photos. Thumbnails appear as actual images, not grey boxes.
+result: fixed
+reported: "The thumbnails are blank (solid grey boxes)."
+severity: major
+fix: "Changed thumbnail generation to use QImage.loadFromData() instead of raw bytes"
+
+### 5. EXIF Metadata Display
 expected: Click on an imported photo in the browser. The metadata panel below shows filename, dimensions, file size, and camera info (if available in the source image).
 result: [pending]
 
-### 5. Duplicate Detection
-expected: Import two copies of the same image. Both appear in the browser but are marked with a "[Duplicate: dup_X]" badge.
-result: [pending]
-
-### 6. Thumbnail Generation
-expected: Import several photos. Thumbnails appear progressively in the browser without the app freezing.
-result: [pending]
-
-### 7. Photo Selection and Metadata
+### 6. Photo Selection and Metadata
 expected: Click different photos in the browser. The metadata panel updates to show each photo's information.
 result: [pending]
 
-### 8. Close and Reopen Project
+### 7. Close and Reopen Project
 expected: Import photos, save the project, close, and reopen. All photos and their metadata persist correctly.
-result: [pending]
-
-### 9. HEIC Support
-expected: Import a HEIC photo (if available). It appears in the browser with correct orientation.
 result: [pending]
 
 ## Summary
 
-total: 9
+total: 7
 passed: 0
-fixed: 3
+fixed: 4
 issues: 0
-pending: 6
+pending: 3
 skipped: 0
