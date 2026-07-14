@@ -84,6 +84,7 @@ class PhotoModel(BaseModel):
     is_duplicate: bool = Field(default=False, description="Flagged as duplicate")
     duplicate_group_id: Optional[str] = Field(default=None, description="Duplicate group ID")
     imported_at: datetime = Field(default_factory=datetime.now, description="Import timestamp")
+    annotation_id: Optional[str] = Field(default=None, description="Linked annotation ID")
 
     def to_project_json(self) -> dict:
         """Serialize photo model to JSON-compatible dict for project persistence.
