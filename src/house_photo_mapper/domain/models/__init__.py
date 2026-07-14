@@ -6,6 +6,7 @@ from house_photo_mapper.domain.models.coordinate import (
     ScreenPoint,
     WorldPoint,
 )
+from house_photo_mapper.domain.models.photo import DuplicateGroup, ExifModel, PhotoModel
 from house_photo_mapper.domain.models.project import ProjectModel
 
 __all__ = [
@@ -14,4 +15,7 @@ __all__ = [
     "CRSMismatchError",
     "WorldPoint",
     "ScreenPoint",
+    "PhotoModel",
+    "ExifModel",
+    "DuplicateGroup",
 ]

@@ -6,9 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pillow>=12.3.0",
+    "pymupdf>=1.26.0",
     "pydantic>=2.13.4",
     "pyside6>=6.11.1",
     "structlog>=26.1.0",
+    "imagehash>=4.3.2",
+    "pillow-heif>=1.4.0",
 ]
 
 [dependency-groups]

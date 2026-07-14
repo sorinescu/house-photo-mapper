@@ -11,6 +11,16 @@ from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindow
 from house_photo_mapper.presentation.views.main_window import MainWindow
 
 
+def _register_image_plugins() -> None:
+    """Register HEIF/HEIC image format plugin for Pillow."""
+    try:
+        from pillow_heif import register_heif_opener
+
+        register_heif_opener()
+    except ImportError:
+        pass
+
+
 def create_application() -> QApplication:
     """Create and configure the QApplication instance."""
     app = QApplication(sys.argv)
@@ -24,6 +34,7 @@ def create_application() -> QApplication:
 def main() -> NoReturn:
     """Application entry point."""
     configure_logging()
+    _register_image_plugins()
     app = create_application()
 
     persistence = PersistenceService()
