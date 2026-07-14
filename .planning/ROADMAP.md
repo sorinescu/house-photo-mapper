@@ -60,7 +60,7 @@ Plans:
   5. Large PDFs (>50MB) render via tile pyramid without UI freezing
   6. User can assign floor numbers to plan pages and reorder them
 
-**Plans:** 7/7 plans complete
+**Plans:** 8 plans (7 complete, 1 gap closure)
 
 Plans:
 
@@ -70,7 +70,8 @@ Plans:
 - [x] 02-04-PLAN.md
 - [x] 02-05-PLAN.md
 - [x] 02-06-PLAN.md
-- [ ] 02-07-PLAN.md
+- [x] 02-07-PLAN.md
+- [ ] 02-08-PLAN.md
 
 - [x] 02-01: PyMuPDF integration — PDF document model, page rendering to QImage, tile pyramid generator
 - [x] 02-02: Plan viewport — QGraphicsScene with NoIndex mode, PlanViewVM, zoom/pan/rotate handlers
@@ -78,7 +79,8 @@ Plans:
 - [x] 02-04: Specification-based calibration — known dimension input, second-dimension verification, endpoint snap
 - [x] 02-05: PlanModel persistence — serialization to project JSON, coordinate transform storage
 - [x] 02-06: Import Plan UI wiring — File menu action, QFileDialog, extension routing to PlanViewModel (gap closure)
-- [ ] 02-07: Gap closure verification — verify import UI works, update UAT status (gap closure)
+- [x] 02-07: Gap closure verification — verify import UI works, update UAT status (gap closure)
+- [ ] 02-08: PlanView viewport wiring — instantiate PlanView in MainWindow, wire PlanViewModel, add toolbar button (gap closure)
 
 ### Phase 3: Photo System
 
