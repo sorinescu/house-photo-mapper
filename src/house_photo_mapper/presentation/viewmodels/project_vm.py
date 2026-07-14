@@ -116,12 +116,12 @@ class ProjectViewModel(QtSafeViewModel):
             if self._photo_vm is not None:
                 photos = self._persistence.load_photo_model(project_dir)
                 if photos:
-                    # Populate PhotoViewModel
-                    self._photo_vm._photos = photos
-                    # Generate thumbnails for loaded photos
+                    # Populate PhotoViewModel and emit signals for each photo
                     for photo in photos:
-                        full_path = str(project_dir / photo.path)
-                        self._photo_vm._thumbnail_generator.generate(full_path)
+                        self._photo_vm._photos.append(photo)
+                        self._photo_vm.photo_added.emit(photo)
+                        # Generate thumbnail using relative path as key
+                        self._photo_vm._thumbnail_generator.generate(photo.path)
 
             self._emit_project_changed()
             self._emit_dirty_changed()

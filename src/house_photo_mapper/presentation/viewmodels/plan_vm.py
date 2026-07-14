@@ -58,9 +58,45 @@ class PlanViewModel(QtSafeViewModel):
         self._plan_model = model
         self._current_page_index = -1
         self._initial_fit_done = False
+
+        # Initialize plan renderer if model has pages
         if model and model.pages:
+            self._init_plan_renderer()
             self.set_page(0)
+        else:
+            self._plan_renderer = None
+
         self.pages_changed.emit(self.get_sorted_pages() if model else [])
+
+    def _init_plan_renderer(self) -> None:
+        """Initialize plan renderer from current plan model's source path."""
+        if self._plan_model is None or not self._plan_model.pages:
+            return
+
+        # Get source path from first page
+        first_page = self._plan_model.pages[0]
+        source_path = first_page.source_path
+
+        # Try to find the full path
+        # First check if it's an absolute path
+        if Path(source_path).exists():
+            full_path = source_path
+        else:
+            # Try relative to current working directory
+            cwd_path = Path.cwd() / source_path
+            if cwd_path.exists():
+                full_path = str(cwd_path)
+            else:
+                # Can't find the source file
+                return
+
+        try:
+            from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
+
+            self._plan_renderer = PlanRenderer(full_path)
+        except Exception:
+            # If renderer initialization fails, continue without rendering
+            self._plan_renderer = None
 
     def set_plan_model(self, model: PlanModel) -> None:
         """Set plan model and emit all UI sync signals.
