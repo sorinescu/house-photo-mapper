@@ -6,7 +6,8 @@ from typing import Iterator
 import imagehash
 from PIL import Image, ImageOps
 
-from house_photo_mapper.domain.models.photo import ExifModel, PhotoModel
+from house_photo_mapper.domain.models.photo import PhotoModel
+from house_photo_mapper.domain.services.exif_extractor import extract_exif
 
 
 SUPPORTED_FORMATS: set[str] = {
@@ -35,71 +36,6 @@ def scan_folder_recursive(folder: Path) -> Iterator[Path]:
             continue
         if item.is_file() and item.suffix.lower() in SUPPORTED_FORMATS:
             yield item
-
-
-def _extract_exif(image: Image.Image) -> ExifModel:
-    """Extract EXIF metadata from PIL Image.
-
-    Args:
-        image: PIL Image with EXIF data.
-
-    Returns:
-        ExifModel with extracted metadata.
-    """
-    exif_data = image.getexif()
-    if not exif_data:
-        return ExifModel()
-
-    from PIL import ExifTags
-
-    tags = {ExifTags.TAGS.get(k, k): v for k, v in exif_data.items()}
-
-    # Extract GPS data
-    gps_lat = None
-    gps_lon = None
-    gps_info = tags.get("GPSInfo")
-    if gps_info:
-        from PIL.ExifTags import GPSTAGS
-
-        gps_tags = {GPSTAGS.get(k, k): v for k, v in gps_info.items()}
-        if "GPSLatitude" in gps_tags and "GPSLongitude" in gps_tags:
-            lat = gps_tags["GPSLatitude"]
-            lon = gps_tags["GPSLongitude"]
-            lat_ref = gps_tags.get("GPSLatitudeRef", "N")
-            lon_ref = gps_tags.get("GPSLongitudeRef", "E")
-
-            # Convert to decimal degrees
-            lat_decimal = float(lat[0]) + float(lat[1]) / 60 + float(lat[2]) / 3600
-            lon_decimal = float(lon[0]) + float(lon[1]) / 60 + float(lon[2]) / 3600
-
-            if lat_ref == "S":
-                lat_decimal = -lat_decimal
-            if lon_ref == "W":
-                lon_decimal = -lon_decimal
-
-            gps_lat = lat_decimal
-            gps_lon = lon_decimal
-
-    # Extract timestamp
-    timestamp = None
-    datetime_str = tags.get("DateTimeOriginal") or tags.get("DateTime")
-    if datetime_str:
-        from datetime import datetime
-
-        try:
-            timestamp = datetime.strptime(datetime_str, "%Y:%m:%d %H:%M:%S")
-        except (ValueError, TypeError):
-            pass
-
-    return ExifModel(
-        timestamp=timestamp,
-        camera_make=tags.get("Make"),
-        camera_model=tags.get("Model"),
-        lens_model=tags.get("LensModel"),
-        orientation=exif_data.get(274, 1),  # 274 = Orientation tag
-        gps_lat=gps_lat,
-        gps_lon=gps_lon,
-    )
 
 
 def import_single_photo(path: Path, project_dir: Path) -> PhotoModel:
@@ -132,8 +68,8 @@ def import_single_photo(path: Path, project_dir: Path) -> PhotoModel:
         # Compute perceptual hash
         phash = str(imagehash.dhash(img))
 
-        # Extract EXIF
-        exif = _extract_exif(img)
+    # Extract EXIF using dedicated service
+    exif = extract_exif(path)
 
     # Compute relative path
     try:

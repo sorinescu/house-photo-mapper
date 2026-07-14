@@ -103,6 +103,38 @@ class PhotoModel(BaseModel):
         """
         return cls.model_validate(data)
 
+    def display_metadata(self) -> dict:
+        """Get a dictionary of metadata for UI display.
+
+        Returns:
+            Dictionary with human-readable metadata fields.
+        """
+        result = {
+            "Filename": self.filename,
+            "Size": f"{self.file_size / 1024:.1f} KB",
+            "Dimensions": f"{self.width} × {self.height}",
+        }
+
+        if self.exif:
+            if self.exif.camera_make and self.exif.camera_model:
+                result["Camera"] = f"{self.exif.camera_make} {self.exif.camera_model}"
+            elif self.exif.camera_make:
+                result["Camera"] = self.exif.camera_make
+
+            if self.exif.lens_model:
+                result["Lens"] = self.exif.lens_model
+
+            if self.exif.timestamp:
+                result["Date"] = self.exif.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+            if self.exif.gps_lat is not None and self.exif.gps_lon is not None:
+                result["GPS"] = f"{self.exif.gps_lat:.6f}, {self.exif.gps_lon:.6f}"
+
+        if self.is_duplicate:
+            result["Duplicate"] = f"Group {self.duplicate_group_id}"
+
+        return result
+
 
 if __name__ == "__main__":
     # Quick manual test

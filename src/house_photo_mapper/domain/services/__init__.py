@@ -1,6 +1,7 @@
 """Domain services package."""
 
 from house_photo_mapper.domain.services.coordinate import CoordinateConverter, ViewportContext
+from house_photo_mapper.domain.services.exif_extractor import extract_exif, get_exif_summary
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import (
     import_photos,
@@ -20,4 +21,6 @@ __all__ = [
     "scan_folder_recursive",
     "import_single_photo",
     "import_photos",
+    "extract_exif",
+    "get_exif_summary",
 ]
