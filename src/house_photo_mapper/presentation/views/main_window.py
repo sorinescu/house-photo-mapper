@@ -346,6 +346,9 @@ class MainWindow(QMainWindow):
         self._photo_vm.metadata_changed.connect(self._photo_metadata.update_metadata)
         self._photo_browser.itemClicked.connect(self._on_photo_clicked)
 
+        # Connect photos_cleared signal to clear photo browser
+        self._vm.project_vm.photos_cleared.connect(self._on_photos_cleared)
+
     def _connect_signals(self) -> None:
         """Connect ViewModel signals to UI slots."""
         self._vm.window_title_changed.connect(self.setWindowTitle)
@@ -497,6 +500,11 @@ class MainWindow(QMainWindow):
         path = item.data(Qt.ItemDataRole.UserRole)
         if path:
             self._photo_vm.select_photo(path)
+
+    @Slot()
+    def _on_photos_cleared(self) -> None:
+        """Handle photos_cleared signal - clear photo browser."""
+        self._photo_browser.clear()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""

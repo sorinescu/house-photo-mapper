@@ -50,6 +50,19 @@ class MainWindowViewModel(QtSafeViewModel):
             self.recent_projects_changed.emit
         )
 
+        # Auto-create a new untitled project on startup
+        self._auto_create_new_project()
+
+    def _auto_create_new_project(self) -> None:
+        """Auto-create a new untitled project on startup."""
+        import tempfile
+        import os
+
+        # Create a temporary untitled project
+        temp_dir = tempfile.gettempdir()
+        untitled_path = os.path.join(temp_dir, "Untitled.hpmpj")
+        self._project_vm.new_project(untitled_path)
+
     @property
     def project_vm(self) -> ProjectViewModel:
         """Return the ProjectViewModel instance."""
@@ -186,6 +199,11 @@ class MainWindowViewModel(QtSafeViewModel):
                 self.status_message_changed.emit(f"Unsupported file type: {suffix}")
                 return
             self._persistence.set_last_opened_directory(str(Path(path).parent))
+
+            # Update ProjectViewModel's plan_model so it gets saved
+            if plan_vm.plan_model is not None:
+                self._project_vm._plan_model = plan_vm.plan_model
+                self._project_vm.mark_dirty()
         except Exception as e:
             self.status_message_changed.emit(f"Failed to import plan: {e}")
 

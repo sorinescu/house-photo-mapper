@@ -27,6 +27,7 @@ class ProjectViewModel(QtSafeViewModel):
     dirty_changed = Signal(bool)
     error_occurred = Signal(str)
     recent_projects_changed = Signal(list)
+    photos_cleared = Signal()  # emitted when photos are cleared (new project)
 
     def __init__(
         self,
@@ -82,6 +83,15 @@ class ProjectViewModel(QtSafeViewModel):
 
             self._project = ProjectModel.create_empty(project_path)
             self._dirty = True
+
+            # Clear photos and plan for new project
+            if self._photo_vm is not None:
+                self._photo_vm._photos.clear()
+                self._photo_vm.photos_changed.emit()
+                self.photos_cleared.emit()
+            if self._plan_vm is not None:
+                self._plan_vm.plan_model = PlanModel()
+
             self._emit_project_changed()
             self._emit_dirty_changed()
         except Exception as e:
@@ -120,8 +130,9 @@ class ProjectViewModel(QtSafeViewModel):
                     for photo in photos:
                         self._photo_vm._photos.append(photo)
                         self._photo_vm.photo_added.emit(photo)
-                        # Generate thumbnail using relative path as key
-                        self._photo_vm._thumbnail_generator.generate(photo.path)
+                        # Generate thumbnail using relative path as key, full path for reading
+                        full_path = str(project_dir / photo.path)
+                        self._photo_vm._thumbnail_generator.generate(photo.path, full_path)
 
             self._emit_project_changed()
             self._emit_dirty_changed()
