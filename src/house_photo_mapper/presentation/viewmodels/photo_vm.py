@@ -77,8 +77,10 @@ class PhotoViewModel(QtSafeViewModel):
             self._photos.append(photo)
             self.photo_added.emit(photo)
 
-            # Generate thumbnail using relative path as key
-            if project_dir:
+            # Generate thumbnail using original_path if available, otherwise full_path
+            if photo.original_path:
+                full_path = photo.original_path
+            elif project_dir:
                 full_path = str(Path(project_dir) / photo.path)
             else:
                 full_path = photo.path

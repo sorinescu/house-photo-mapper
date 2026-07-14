@@ -338,6 +338,10 @@ class MainWindow(QMainWindow):
         # Connect PlanViewModel signals to sidebar
         self._plan_vm.pages_changed.connect(self._on_pages_changed)
         self._plan_vm.pixmap_ready.connect(self._on_pixmap_ready)
+        self._plan_vm.thumbnail_ready.connect(self._on_plan_thumbnail_ready)
+
+        # Connect plan_cleared signal to clear plan view
+        self._vm.project_vm.plan_cleared.connect(self._on_plan_cleared)
 
         # Connect PhotoViewModel signals to photo browser and metadata
         self._photo_vm.photo_added.connect(self._on_photo_added)
@@ -481,6 +485,22 @@ class MainWindow(QMainWindow):
                     )
                     item.setIcon(QIcon(scaled_pixmap))
                     break
+
+    @Slot(int, object)
+    def _on_plan_thumbnail_ready(self, page_index: int, pixmap) -> None:
+        """Handle PlanViewModel.thumbnail_ready signal - update sidebar thumbnail."""
+        for i in range(self._sidebar.count()):
+            item = self._sidebar.item(i)
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if data and data["page_num"] == page_index:
+                item.setIcon(QIcon(pixmap))
+                break
+
+    @Slot()
+    def _on_plan_cleared(self) -> None:
+        """Handle plan_cleared signal - clear plan view and sidebar."""
+        self._plan_view.clear()
+        self._sidebar.clear()
 
     @Slot(object)
     def _on_photo_added(self, photo) -> None:

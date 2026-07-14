@@ -143,6 +143,11 @@ class PlanView(QWidget):
         """
         return self._view.mapFromScene(scene_pos)
 
+    def clear(self) -> None:
+        """Clear the plan view scene."""
+        self._scene.clear()
+        self._initial_fit_done = False
+
 
 if __name__ == "__main__":
     # Quick manual test

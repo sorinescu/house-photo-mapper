@@ -80,6 +80,7 @@ def import_single_photo(path: Path, project_dir: Path) -> PhotoModel:
     return PhotoModel(
         path=rel_path,
         filename=path.name,
+        original_path=str(path.absolute()),
         file_size=path.stat().st_size,
         width=width,
         height=height,

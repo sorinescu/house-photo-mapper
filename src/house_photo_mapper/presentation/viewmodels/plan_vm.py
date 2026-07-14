@@ -25,6 +25,7 @@ class PlanViewModel(QtSafeViewModel):
     # Signals for UI sync
     page_changed = Signal(int)           # Emits new page index
     pixmap_ready = Signal(QPixmap)       # Emits rendered page pixmap
+    thumbnail_ready = Signal(int, QPixmap)  # Emits page_index, thumbnail pixmap
     zoom_changed = Signal(float)         # Emits zoom factor
     rotation_changed = Signal(int)       # Emits rotation angle (0, 90, 180, 270)
     calibration_changed = Signal(object) # Emits CalibrationModel or None
@@ -63,6 +64,8 @@ class PlanViewModel(QtSafeViewModel):
         if model and model.pages:
             self._init_plan_renderer()
             self.set_page(0)
+            # Generate thumbnails for all pages
+            self.generate_all_thumbnails()
         else:
             self._plan_renderer = None
 
@@ -459,6 +462,32 @@ class PlanViewModel(QtSafeViewModel):
         if self._plan_model is None:
             return []
         return self._plan_model.get_sorted_pages()
+
+    def generate_all_thumbnails(self) -> None:
+        """Generate thumbnails for all pages in the plan.
+
+        Uses a smaller size for sidebar thumbnails (120x120).
+        Emits thumbnail_ready for each page as it completes.
+        """
+        if self._plan_model is None or self._plan_renderer is None:
+            return
+
+        sorted_pages = self._plan_model.get_sorted_pages()
+        for idx, page in enumerate(sorted_pages):
+            try:
+                # Render at lower DPI for thumbnail
+                pixmap = self._plan_renderer.render_page(page.page_index, dpi=72)
+                # Scale to thumbnail size
+                from PySide6.QtCore import Qt
+                scaled = pixmap.scaled(
+                    120, 120,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.thumbnail_ready.emit(page.page_index, scaled)
+            except Exception:
+                # Skip failed thumbnails - placeholder will remain
+                pass
 
 
 if __name__ == "__main__":

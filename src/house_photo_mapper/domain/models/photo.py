@@ -57,6 +57,7 @@ class PhotoModel(BaseModel):
     Attributes:
         path: Path to photo file, relative to project directory.
         filename: Original filename.
+        original_path: Original absolute path when imported.
         file_size: File size in bytes.
         width: Image width in pixels.
         height: Image height in pixels.
@@ -74,6 +75,7 @@ class PhotoModel(BaseModel):
 
     path: str = Field(description="Relative path from project root")
     filename: str = Field(description="Original filename")
+    original_path: str = Field(default="", description="Original absolute path when imported")
     file_size: int = Field(ge=0, description="File size in bytes")
     width: int = Field(gt=0, description="Image width in pixels")
     height: int = Field(gt=0, description="Image height in pixels")
