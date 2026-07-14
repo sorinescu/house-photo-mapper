@@ -48,6 +48,7 @@ class ProjectViewModel(QtSafeViewModel):
         self._plan_vm: PlanViewModel | None = None
         self._plan_model: PlanModel | None = None
         self._photo_vm: PhotoViewModel | None = None
+        self._annotation_vm = None
 
     @property
     def project(self) -> ProjectModel | None:
@@ -140,6 +141,16 @@ class ProjectViewModel(QtSafeViewModel):
                             full_path = str(project_dir / photo.path)
                         self._photo_vm._thumbnail_generator.generate(photo.path, full_path)
 
+            # Load annotations from ProjectModel
+            if self._annotation_vm is not None and self._project.annotations:
+                from house_photo_mapper.domain.models.annotation import AnnotationModel
+                for ann_data in self._project.annotations:
+                    ann = AnnotationModel.from_project_json(ann_data)
+                    self._annotation_vm._annotations[ann.annotation_id] = ann
+                self._annotation_vm.annotations_changed.emit(
+                    [a.annotation_id for a in self._annotation_vm.get_all_annotations()]
+                )
+
             self._emit_project_changed()
             self._emit_dirty_changed()
             self._emit_recent_projects_changed()
@@ -158,6 +169,13 @@ class ProjectViewModel(QtSafeViewModel):
             return
 
         try:
+            # Serialize annotations from AnnotationViewModel into ProjectModel
+            if self._annotation_vm is not None:
+                self._project.annotations = [
+                    ann.to_project_json()
+                    for ann in self._annotation_vm.get_all_annotations()
+                ]
+
             self._persistence.save_project(self._project)
             project_dir = self._project_dir()
 
@@ -186,6 +204,13 @@ class ProjectViewModel(QtSafeViewModel):
             return
 
         try:
+            # Serialize annotations from AnnotationViewModel into ProjectModel
+            if self._annotation_vm is not None:
+                self._project.annotations = [
+                    ann.to_project_json()
+                    for ann in self._annotation_vm.get_all_annotations()
+                ]
+
             self._persistence.save_project_as(self._project, path)
             project_dir = Path(path).parent
 
@@ -229,6 +254,14 @@ class ProjectViewModel(QtSafeViewModel):
             plan_vm: PlanViewModel instance to coordinate with.
         """
         self._plan_vm = plan_vm
+
+    def set_annotation_vm(self, annotation_vm) -> None:
+        """Set the AnnotationViewModel reference for persistence coordination.
+
+        Args:
+            annotation_vm: AnnotationViewModel instance.
+        """
+        self._annotation_vm = annotation_vm
 
     def set_photo_vm(self, photo_vm: "PhotoViewModel") -> None:
         """Set the PhotoViewModel reference for photo persistence coordination.

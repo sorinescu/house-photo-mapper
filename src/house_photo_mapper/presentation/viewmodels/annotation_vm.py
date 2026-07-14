@@ -47,6 +47,15 @@ class AnnotationViewModel(QtSafeViewModel):
         # Creation flow state
         self._pending_annotation: Optional[AnnotationModel] = None
         self._creation_step: int = 0
+        self._undo_stack = None
+
+    def set_undo_stack(self, undo_stack) -> None:
+        """Set the QUndoStack for undo/redo support.
+
+        Args:
+            undo_stack: QUndoStack instance.
+        """
+        self._undo_stack = undo_stack
 
     @property
     def tool_state(self) -> ToolState:
@@ -100,7 +109,7 @@ class AnnotationViewModel(QtSafeViewModel):
 
     @Slot(float, float)
     def place_marker(self, x: float, y: float) -> None:
-        """Step 1: Place camera marker at position.
+        """Place camera marker at position and show properties panel.
 
         Args:
             x: X coordinate on plan.
@@ -114,8 +123,14 @@ class AnnotationViewModel(QtSafeViewModel):
 
         self._pending_annotation.position_x = x
         self._pending_annotation.position_y = y
-        self._creation_step = 2
-        self.tool_changed.emit("set_direction")
+
+        # Finalize immediately - show properties panel
+        annotation = self._pending_annotation
+        self._annotations[annotation.annotation_id] = annotation
+        self._pending_annotation = None
+        self._creation_step = 0
+        self.annotation_added.emit(annotation.annotation_id)
+        self.annotations_changed.emit([a.annotation_id for a in self.current_annotations])
 
     @Slot(float)
     def set_direction(self, angle: float) -> None:

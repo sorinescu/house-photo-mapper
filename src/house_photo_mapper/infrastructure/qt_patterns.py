@@ -241,6 +241,11 @@ class PlanGraphicsView(QGraphicsView):
         """
         super().__init__(scene, parent)
 
+        # Annotation VM for placement
+        self._annotation_vm = None
+        self._pending_marker_item = None
+        self._annotation_items: dict[str, list] = {}
+
         # Zoom centers on mouse cursor (RESEARCH.md Pitfall 5 fix)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -267,6 +272,55 @@ class PlanGraphicsView(QGraphicsView):
         self._pan_active = False
         self._pan_start = QPointF()
 
+    def set_annotation_vm(self, vm) -> None:
+        """Set AnnotationViewModel for mouse event handling."""
+        self._annotation_vm = vm
+        if vm is not None:
+            vm.annotation_added.connect(self._on_annotation_added)
+            vm.annotation_removed.connect(self._on_annotation_removed)
+            vm.annotations_changed.connect(self._on_annotations_changed)
+            self.scene().selectionChanged.connect(self._on_scene_selection_changed)
+
+    def _on_annotation_added(self, annotation_id: str) -> None:
+        """Associate pending marker with new annotation."""
+        if self._pending_marker_item is not None:
+            self._annotation_items[annotation_id] = [self._pending_marker_item]
+            self._pending_marker_item = None
+
+    def _on_annotation_removed(self, annotation_id: str) -> None:
+        """Remove graphics items for deleted annotation."""
+        items = self._annotation_items.pop(annotation_id, [])
+        for item in items:
+            self.scene().removeItem(item)
+
+    def _on_annotations_changed(self, annotation_ids: list) -> None:
+        """Sync scene markers with ViewModel annotations (handles loaded annotations)."""
+        if self._annotation_vm is None:
+            return
+        from house_photo_mapper.presentation.graphics.annotation_items import CameraMarkerItem
+        for ann_id in annotation_ids:
+            if ann_id not in self._annotation_items:
+                ann = self._annotation_vm.get_annotation(ann_id)
+                if ann is not None:
+                    marker = CameraMarkerItem(x=ann.position_x, y=ann.position_y)
+                    self.scene().addItem(marker)
+                    self._annotation_items[ann_id] = [marker]
+
+    def _on_scene_selection_changed(self) -> None:
+        """Handle scene selection changes - select annotation in ViewModel."""
+        if self._annotation_vm is None:
+            return
+        selected = self.scene().selectedItems()
+        if not selected:
+            self._annotation_vm.deselect_annotation()
+            return
+        # Find annotation_id for selected item (only check marker items)
+        for item in selected:
+            for ann_id, items in self._annotation_items.items():
+                if item in items:
+                    self._annotation_vm.select_annotation(ann_id)
+                    return
+
     def wheelEvent(self, event: QWheelEvent) -> None:
         """Handle wheel event: Ctrl+wheel zooms, two-finger scroll pans (trackpad)."""
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -285,12 +339,29 @@ class PlanGraphicsView(QGraphicsView):
             super().wheelEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse press: middle button starts pan."""
+        """Handle mouse press: middle button starts pan, left button places markers."""
         if event.button() == Qt.MouseButton.MiddleButton:
             self._pan_active = True
             self._pan_start = event.position()
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
             event.accept()
+        elif event.button() == Qt.MouseButton.LeftButton and self._annotation_vm is not None:
+            from house_photo_mapper.presentation.viewmodels.annotation_vm import ToolState
+            if self._annotation_vm.tool_state == ToolState.PLACE_MARKER:
+                from house_photo_mapper.presentation.graphics.annotation_items import CameraMarkerItem
+                scene_pos = self.mapToScene(event.position().toPoint())
+
+                # Create marker graphics item
+                marker = CameraMarkerItem(x=scene_pos.x(), y=scene_pos.y())
+                self.scene().addItem(marker)
+                self._pending_marker_item = marker
+
+                # Store position in ViewModel (triggers annotation_added)
+                self._annotation_vm.place_marker(scene_pos.x(), scene_pos.y())
+                event.accept()
+                return
+            else:
+                super().mousePressEvent(event)
         else:
             super().mousePressEvent(event)
 

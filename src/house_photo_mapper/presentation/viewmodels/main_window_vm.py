@@ -290,6 +290,58 @@ class MainWindowViewModel(QtSafeViewModel):
         if path:
             self._project_vm.open_project(path)
 
+    @Slot()
+    def export_annotations(self) -> None:
+        """Show Export Annotations dialog and save annotations as JSON."""
+        if self._project_vm.project is None:
+            self.status_message_changed.emit("No project open")
+            return
+
+        annotation_vm = self._project_vm._annotation_vm
+        if annotation_vm is None:
+            self.status_message_changed.emit("No annotations available")
+            return
+
+        annotations = annotation_vm.get_all_annotations()
+        if not annotations:
+            self.status_message_changed.emit("No annotations to export")
+            return
+
+        directory = self._persistence.get_last_opened_directory()
+        default_name = self._project_vm.project.project_name + "_annotations.json"
+        path, _ = QFileDialog.getSaveFileName(
+            None,
+            "Export Annotations",
+            str(Path(directory) / default_name),
+            "JSON Files (*.json)",
+        )
+        if not path:
+            return
+
+        try:
+            import json
+
+            data = []
+            for ann in annotations:
+                data.append({
+                    "id": ann.annotation_id,
+                    "title": ann.title,
+                    "description": ann.description,
+                    "tags": ann.tags,
+                    "position_x": ann.position_x,
+                    "position_y": ann.position_y,
+                    "page_index": ann.page_index,
+                    "floor": ann.floor,
+                })
+
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+
+            self._persistence.set_last_opened_directory(str(Path(path).parent))
+            self.status_message_changed.emit(f"Exported {len(data)} annotations to {Path(path).name}")
+        except Exception as e:
+            self.status_message_changed.emit(f"Failed to export annotations: {e}")
+
     def get_recent_projects(self) -> list[str]:
         """Get list of recent project paths."""
         return self._project_vm.get_recent_projects()

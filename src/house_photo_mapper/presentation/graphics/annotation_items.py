@@ -29,7 +29,7 @@ class CameraMarkerItem(QGraphicsEllipseItem):
 
     positionChanged = Signal(float, float)
 
-    MARKER_RADIUS = 8.0
+    MARKER_RADIUS = 24.0
 
     def __init__(self, x: float = 0.0, y: float = 0.0, parent=None):
         super().__init__(

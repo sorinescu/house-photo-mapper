@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, QPointF, QRectF
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QGraphicsPixmapItem, QGraphicsScene
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QMouseEvent, QPixmap
+from PySide6.QtWidgets import QGraphicsPixmapItem, QVBoxLayout, QWidget
 
 from house_photo_mapper.infrastructure.qt_patterns import PlanGraphicsScene, PlanGraphicsView
+from house_photo_mapper.presentation.graphics.annotation_items import (
+    AnnotationGraphicsGroup,
+    CameraMarkerItem,
+    DirectionArrowItem,
+    ViewingConeItem,
+)
 
 if TYPE_CHECKING:
+    from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
     from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
 
 
@@ -22,7 +29,7 @@ class PlanView(QWidget):
     click capture.
     """
 
-    def __init__(self, plan_vm: "PlanViewModel", parent: QWidget | None = None) -> None:
+    def __init__(self, plan_vm: PlanViewModel, parent: QWidget | None = None) -> None:
         """Initialize PlanView.
 
         Args:
@@ -31,6 +38,7 @@ class PlanView(QWidget):
         """
         super().__init__(parent)
         self._plan_vm = plan_vm
+        self._annotation_vm: AnnotationViewModel | None = None
 
         # Create scene and view
         self._scene = PlanGraphicsScene(self)
@@ -148,11 +156,21 @@ class PlanView(QWidget):
         self._scene.clear()
         self._initial_fit_done = False
 
+    def set_annotation_vm(self, vm: AnnotationViewModel) -> None:
+        """Set AnnotationViewModel for mouse event handling.
+
+        Args:
+            vm: AnnotationViewModel to notify on mouse events.
+        """
+        self._annotation_vm = vm
+        self._view.set_annotation_vm(vm)
+
 
 if __name__ == "__main__":
     # Quick manual test
-    from PySide6.QtWidgets import QApplication
     import sys
+
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel

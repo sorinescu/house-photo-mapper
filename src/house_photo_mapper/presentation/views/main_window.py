@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QKeySequence, QIcon
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -19,9 +19,14 @@ from PySide6.QtWidgets import (
 
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import SUPPORTED_FORMATS
+from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
 from house_photo_mapper.presentation.viewmodels.photo_vm import PhotoViewModel
 from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+from house_photo_mapper.presentation.views.annotation_properties_panel import (
+    AnnotationPropertiesPanel,
+)
+from house_photo_mapper.presentation.views.annotation_toolbar import AnnotationToolbar
 from house_photo_mapper.presentation.views.photo_browser import PhotoBrowser
 from house_photo_mapper.presentation.views.photo_metadata import PhotoMetadataPanel
 from house_photo_mapper.presentation.views.plan_sidebar import PlanSidebar
@@ -77,6 +82,14 @@ class MainWindow(QMainWindow):
         self._photo_vm = PhotoViewModel()
         self._vm.project_vm.set_photo_vm(self._photo_vm)
 
+        # Create AnnotationViewModel and wire to PlanViewModel
+        from PySide6.QtGui import QUndoStack
+        self._undo_stack = QUndoStack(self)
+        self._annotation_vm = AnnotationViewModel()
+        self._annotation_vm.set_undo_stack(self._undo_stack)
+        self._plan_vm.set_annotation_vm(self._annotation_vm)
+        self._vm.project_vm.set_annotation_vm(self._annotation_vm)
+
         self.setWindowTitle("HousePhotoMapper")
         self.resize(1200, 800)
 
@@ -125,6 +138,10 @@ class MainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu("&Help")
         self._add_help_actions(help_menu)
+
+        # Annotation menu
+        annotation_menu = menubar.addMenu("&Annotation")
+        self._add_annotation_actions(annotation_menu)
 
     def _add_file_actions(self, menu: QMenu) -> None:
         """Add actions to File menu."""
@@ -186,6 +203,15 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
+        # Export Annotations
+        export_annotations_action = QAction("&Export Annotations...", self)
+        export_annotations_action.setShortcut(QKeySequence("Ctrl+E"))
+        export_annotations_action.setStatusTip("Export annotations as JSON")
+        export_annotations_action.triggered.connect(self._vm.export_annotations)
+        menu.addAction(export_annotations_action)
+
+        menu.addSeparator()
+
         # Recent projects submenu
         self._recent_menu = menu.addMenu("Recent &Projects")
         self._vm.recent_projects_changed.connect(self._update_recent_menu)
@@ -203,15 +229,20 @@ class MainWindow(QMainWindow):
 
     def _add_edit_actions(self, menu: QMenu) -> None:
         """Add actions to Edit menu."""
-        undo_action = QAction("&Undo", self)
-        undo_action.setShortcut(QKeySequence.StandardKey.Undo)
-        undo_action.setEnabled(False)
-        menu.addAction(undo_action)
+        self._undo_action = QAction("&Undo", self)
+        self._undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        self._undo_action.setEnabled(False)
+        self._undo_action.triggered.connect(self._undo_stack.undo)
+        menu.addAction(self._undo_action)
 
-        redo_action = QAction("&Redo", self)
-        redo_action.setShortcut(QKeySequence.StandardKey.Redo)
-        redo_action.setEnabled(False)
-        menu.addAction(redo_action)
+        self._redo_action = QAction("&Redo", self)
+        self._redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        self._redo_action.setEnabled(False)
+        self._redo_action.triggered.connect(self._undo_stack.redo)
+        menu.addAction(self._redo_action)
+
+        self._undo_stack.canUndoChanged.connect(self._undo_action.setEnabled)
+        self._undo_stack.canRedoChanged.connect(self._redo_action.setEnabled)
 
         menu.addSeparator()
 
@@ -267,6 +298,34 @@ class MainWindow(QMainWindow):
         about_qt_action.triggered.connect(show_about_qt)
         menu.addAction(about_qt_action)
 
+    def _add_annotation_actions(self, menu: QMenu) -> None:
+        """Add actions to Annotation menu."""
+        self._select_action = QAction("&Select Tool", self)
+        self._select_action.setShortcut(QKeySequence("V"))
+        self._select_action.setStatusTip("Select and move annotations")
+        self._select_action.triggered.connect(lambda: self._annotation_vm.set_tool("select"))
+        menu.addAction(self._select_action)
+
+        self._place_marker_action = QAction("&Place Marker", self)
+        self._place_marker_action.setShortcut(QKeySequence("Ctrl+Shift+A"))
+        self._place_marker_action.setStatusTip("Place a camera marker on the plan")
+        self._place_marker_action.triggered.connect(lambda: self._annotation_vm.set_tool("place_marker"))
+        menu.addAction(self._place_marker_action)
+
+        self._draw_polygon_action = QAction("Draw &Polygon", self)
+        self._draw_polygon_action.setStatusTip("Draw a visible area polygon")
+        self._draw_polygon_action.triggered.connect(lambda: self._annotation_vm.set_tool("draw_polygon"))
+        menu.addAction(self._draw_polygon_action)
+
+        menu.addSeparator()
+
+        self._delete_action = QAction("&Delete Annotation", self)
+        self._delete_action.setShortcut(QKeySequence("Delete"))
+        self._delete_action.setStatusTip("Delete the selected annotation")
+        self._delete_action.triggered.connect(self._delete_selected_annotation)
+        self._delete_action.setEnabled(False)
+        menu.addAction(self._delete_action)
+
     def _create_toolbar(self) -> None:
         """Create the main toolbar."""
         self._toolbar = QToolBar("Main Toolbar", self)
@@ -294,6 +353,11 @@ class MainWindow(QMainWindow):
         self._tb_import_photos.triggered.connect(self._vm.import_photo_files)
         self._toolbar.addAction(self._tb_import_photos)
 
+        # Annotation toolbar
+        self._annotation_toolbar = AnnotationToolbar(self)
+        self._annotation_toolbar.tool_selected.connect(self._annotation_vm.set_tool)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._annotation_toolbar)
+
     def _create_status_bar(self) -> None:
         """Create the status bar."""
         self._status_bar = QStatusBar(self)
@@ -309,16 +373,22 @@ class MainWindow(QMainWindow):
         # Wire PlanView to PlanViewModel for calibration
         self._plan_vm.set_plan_view(self._plan_view)
 
+        # Wire PlanView to AnnotationViewModel for mouse events
+        self._plan_view.set_annotation_vm(self._annotation_vm)
+
         # Create photo browser and metadata panel
         self._photo_browser = PhotoBrowser()
         self._photo_metadata = PhotoMetadataPanel()
+        self._annotation_panel = AnnotationPropertiesPanel()
+        self._annotation_panel.setVisible(False)
 
-        # Create right panel for photos
+        # Create right panel for photos and annotation properties
         photo_panel = QWidget()
         photo_layout = QVBoxLayout(photo_panel)
         photo_layout.setContentsMargins(0, 0, 0, 0)
         photo_layout.addWidget(self._photo_browser)
         photo_layout.addWidget(self._photo_metadata)
+        photo_layout.addWidget(self._annotation_panel)
 
         # Create splitter: sidebar left, plan view center, photos right
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -353,6 +423,17 @@ class MainWindow(QMainWindow):
         # Connect photos_cleared signal to clear photo browser
         self._vm.project_vm.photos_cleared.connect(self._on_photos_cleared)
 
+        # Connect annotation signals
+        self._annotation_vm.tool_changed.connect(self._annotation_toolbar.set_active_tool)
+        self._annotation_vm.annotation_selected.connect(self._on_annotation_selected)
+        self._annotation_vm.annotation_deselected.connect(self._on_annotation_deselected)
+        self._annotation_vm.annotation_added.connect(self._on_annotation_added)
+        self._annotation_vm.annotation_removed.connect(self._on_annotation_removed)
+        self._annotation_panel.save_requested.connect(self._annotation_vm.update_annotation_metadata)
+
+        # Connect photo browser ↔ annotation sync
+        self._annotation_vm.annotation_selected.connect(self._highlight_photo_for_annotation)
+
     def _connect_signals(self) -> None:
         """Connect ViewModel signals to UI slots."""
         self._vm.window_title_changed.connect(self.setWindowTitle)
@@ -363,10 +444,10 @@ class MainWindow(QMainWindow):
     def _on_project_changed(self, project_vm: "ProjectViewModel") -> None:
         """Handle project change signal."""
         has_project = project_vm.project is not None
-        self._save_action.setEnabled(has_project and project_vm.dirty)
+        self._save_action.setEnabled(has_project)
         self._save_as_action.setEnabled(has_project)
         self._close_action.setEnabled(has_project)
-        self._tb_save.setEnabled(has_project and project_vm.dirty)
+        self._tb_save.setEnabled(has_project)
 
     def _update_recent_menu(self, recent_projects: list[str]) -> None:
         """Update the Recent Projects submenu."""
@@ -516,24 +597,99 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_photo_clicked(self, item) -> None:
-        """Handle photo browser item click - select photo."""
+        """Handle photo browser item click - select photo and linked annotation."""
         path = item.data(Qt.ItemDataRole.UserRole)
         if path:
             self._photo_vm.select_photo(path)
+            # Check if this photo has a linked annotation
+            for ann in self._annotation_vm.get_all_annotations():
+                if ann.photo_path == path:
+                    self._annotation_vm.select_annotation(ann.annotation_id)
+                    return
 
     @Slot()
     def _on_photos_cleared(self) -> None:
         """Handle photos_cleared signal - clear photo browser."""
         self._photo_browser.clear()
 
+    @Slot(str)
+    def _on_annotation_selected(self, annotation_id: str) -> None:
+        """Handle annotation selection - show properties panel."""
+        ann = self._annotation_vm.get_annotation(annotation_id)
+        if ann:
+            self._annotation_panel.show_annotation(
+                ann.annotation_id, ann.title, ann.description, ann.tags
+            )
+            self._delete_action.setEnabled(True)
+
+    @Slot()
+    def _on_annotation_deselected(self) -> None:
+        """Handle annotation deselection - hide properties panel."""
+        self._annotation_panel.clear()
+        self._delete_action.setEnabled(False)
+
+    @Slot(str)
+    def _on_annotation_added(self, annotation_id: str) -> None:
+        """Handle new annotation added - link to selected photo if any."""
+        self._annotation_vm.select_annotation(annotation_id)
+        # Link annotation to currently selected photo
+        selected_photo = self._photo_vm.selected_photo
+        if selected_photo:
+            ann = self._annotation_vm.get_annotation(annotation_id)
+            if ann:
+                ann.photo_path = selected_photo.path
+                selected_photo.annotation_id = annotation_id
+
+    @Slot(str)
+    def _on_annotation_removed(self, annotation_id: str) -> None:
+        """Handle annotation removed - unbind from photo."""
+        # Find and unbind photo that was linked to this annotation
+        for photo in self._photo_vm.photos:
+            if photo.annotation_id == annotation_id:
+                photo.annotation_id = None
+                break
+        self._annotation_panel.clear()
+        self._delete_action.setEnabled(False)
+
+    @Slot(str)
+    def _highlight_photo_for_annotation(self, annotation_id: str) -> None:
+        """Highlight the photo in the browser that corresponds to the selected annotation."""
+        ann = self._annotation_vm.get_annotation(annotation_id)
+        if not ann or not ann.photo_path:
+            return
+        # Find and select the matching photo item in the browser
+        for i in range(self._photo_browser.count()):
+            item = self._photo_browser.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == ann.photo_path:
+                self._photo_browser.setCurrentItem(item)
+                self._photo_browser.scrollToItem(item)
+                break
+
+    def _delete_selected_annotation(self) -> None:
+        """Delete the currently selected annotation."""
+        from house_photo_mapper.presentation.commands import DeleteAnnotationCommand
+
+        aid = self._annotation_vm.selected_annotation_id
+        if aid:
+            cmd = DeleteAnnotationCommand(
+                annotation_vm=self._annotation_vm,
+                annotation_id=aid,
+            )
+            self._undo_stack.push(cmd)
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""
         if event.key() == Qt.Key.Key_S and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            if self._vm.dirty:
-                self._vm.save_project()
+            self._vm.save_project()
             event.accept()
         elif event.key() == Qt.Key.Key_S and event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
             self._vm.save_project_as()
+            event.accept()
+        elif event.key() == Qt.Key.Key_V and not event.modifiers():
+            self._annotation_vm.set_tool("select")
+            event.accept()
+        elif event.key() == Qt.Key.Key_Delete:
+            self._delete_selected_annotation()
             event.accept()
         else:
             super().keyPressEvent(event)
