@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from house_photo_mapper.domain.services.persistence import PersistenceService
+from house_photo_mapper.domain.services.photo_importer import SUPPORTED_FORMATS
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
 from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
 from house_photo_mapper.presentation.views.plan_sidebar import PlanSidebar
@@ -87,6 +88,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """Set up menus, toolbars, status bar, and central widget."""
+        self.setAcceptDrops(True)
         self._create_menu_bar()
         self._create_toolbar()
         self._create_status_bar()
@@ -138,6 +140,13 @@ class MainWindow(QMainWindow):
         import_action.setStatusTip("Import a PDF or image plan file")
         import_action.triggered.connect(self._vm.import_plan)
         menu.addAction(import_action)
+
+        # Import Photos
+        import_photos_action = QAction("Import &Photos...", self)
+        import_photos_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        import_photos_action.setStatusTip("Import photos from folder")
+        import_photos_action.triggered.connect(self._vm.import_photos_from_folder)
+        menu.addAction(import_photos_action)
 
         menu.addSeparator()
 
@@ -449,3 +458,26 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def dragEnterEvent(self, event) -> None:
+        """Accept drag events with supported image files."""
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    suffix = Path(url.toLocalFile()).suffix.lower()
+                    if suffix in SUPPORTED_FORMATS:
+                        event.acceptProposedAction()
+                        return
+        event.ignore()
+
+    def dropEvent(self, event) -> None:
+        """Handle drop events by importing photos."""
+        paths = []
+        for url in event.mimeData().urls():
+            if url.isLocalFile():
+                paths.append(url.toLocalFile())
+        if paths:
+            self._vm.import_photos(paths)
+            event.acceptProposedAction()
+        else:
+            event.ignore()

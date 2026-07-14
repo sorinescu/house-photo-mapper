@@ -189,6 +189,69 @@ class MainWindowViewModel(QtSafeViewModel):
         except Exception as e:
             self.status_message_changed.emit(f"Failed to import plan: {e}")
 
+    @Slot(list)
+    def import_photos(self, paths: list[str]) -> None:
+        """Import photos from file paths.
+
+        Args:
+            paths: List of photo file paths to import.
+        """
+        if self._project_vm.project is None:
+            self.status_message_changed.emit("No project open to import photos into")
+            return
+
+        try:
+            from house_photo_mapper.domain.services.photo_importer import import_photos
+
+            project_dir = Path(self._project_vm.project.path).parent
+            photo_paths = [Path(p) for p in paths]
+            photos = import_photos(photo_paths, project_dir)
+
+            # Add photos to project (convert to dict for storage)
+            for photo in photos:
+                self._project_vm.project.photos.append(photo.to_project_json())
+
+            self._project_vm.mark_dirty()
+            self.status_message_changed.emit(f"Imported {len(photos)} photos")
+        except Exception as e:
+            self.status_message_changed.emit(f"Failed to import photos: {e}")
+
+    @Slot()
+    def import_photos_from_folder(self) -> None:
+        """Show folder dialog and import all photos recursively."""
+        if self._project_vm.project is None:
+            self.status_message_changed.emit("No project open to import photos into")
+            return
+
+        directory = self._persistence.get_last_opened_directory()
+        folder = QFileDialog.getExistingDirectory(
+            None,
+            "Import Photos from Folder",
+            directory,
+        )
+        if not folder:
+            return
+
+        try:
+            from house_photo_mapper.domain.services.photo_importer import (
+                import_photos,
+                scan_folder_recursive,
+            )
+
+            project_dir = Path(self._project_vm.project.path).parent
+            photo_paths = list(scan_folder_recursive(Path(folder)))
+            photos = import_photos(photo_paths, project_dir)
+
+            # Add photos to project (convert to dict for storage)
+            for photo in photos:
+                self._project_vm.project.photos.append(photo.to_project_json())
+
+            self._project_vm.mark_dirty()
+            self._persistence.set_last_opened_directory(folder)
+            self.status_message_changed.emit(f"Imported {len(photos)} photos from folder")
+        except Exception as e:
+            self.status_message_changed.emit(f"Failed to import photos: {e}")
+
     @Slot(str)
     def open_recent_project(self, path: str) -> None:
         """Open a project from the recent projects list.
