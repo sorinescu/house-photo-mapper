@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QKeySequence
+from PySide6.QtGui import QAction, QCloseEvent, QKeyEvent, QKeySequence, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -388,7 +388,18 @@ class MainWindow(QMainWindow):
         active_idx = self._plan_vm.current_page
         if 0 <= active_idx < len(sorted_pages):
             page = sorted_pages[active_idx]
-            self._sidebar.add_page(page.page_index, pixmap, page.floor)
+            # Find existing item and update its icon instead of adding new
+            for i in range(self._sidebar.count()):
+                item = self._sidebar.item(i)
+                data = item.data(Qt.ItemDataRole.UserRole)
+                if data and data["page_num"] == page.page_index:
+                    scaled_pixmap = pixmap.scaled(
+                        120, 120,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    item.setIcon(QIcon(scaled_pixmap))
+                    break
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""
