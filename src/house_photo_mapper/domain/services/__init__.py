@@ -9,6 +9,7 @@ from house_photo_mapper.domain.services.photo_importer import (
     scan_folder_recursive,
 )
 from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
+from house_photo_mapper.domain.services.thumbnail_generator import ThumbnailGenerator, ThumbnailWorker
 from house_photo_mapper.domain.services.tile_pyramid import TilePyramid, TileSpec
 
 __all__ = [
@@ -23,4 +24,6 @@ __all__ = [
     "import_photos",
     "extract_exif",
     "get_exif_summary",
+    "ThumbnailGenerator",
+    "ThumbnailWorker",
 ]
