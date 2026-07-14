@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QSplitter,
     QStatusBar,
     QToolBar,
     QWidget,
@@ -17,6 +18,9 @@ from PySide6.QtWidgets import (
 
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
+from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+from house_photo_mapper.presentation.views.plan_sidebar import PlanSidebar
+from house_photo_mapper.presentation.views.plan_view import PlanView
 
 if TYPE_CHECKING:
     from house_photo_mapper.domain.services.persistence import PersistenceService
@@ -59,6 +63,10 @@ class MainWindow(QMainWindow):
 
         self._vm = view_model
         self._persistence = persistence
+
+        # Create PlanViewModel and wire to ProjectViewModel
+        self._plan_vm = PlanViewModel()
+        self._vm.project_vm.set_plan_vm(self._plan_vm)
 
         self.setWindowTitle("HousePhotoMapper")
         self.resize(1200, 800)
@@ -251,6 +259,10 @@ class MainWindow(QMainWindow):
         self._tb_save.setEnabled(False)
         self._toolbar.addAction(self._tb_save)
 
+        self._tb_import = QAction("Import Plan", self)
+        self._tb_import.triggered.connect(self._vm.import_plan)
+        self._toolbar.addAction(self._tb_import)
+
     def _create_status_bar(self) -> None:
         """Create the status bar."""
         self._status_bar = QStatusBar(self)
@@ -258,10 +270,30 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("Ready")
 
     def _create_central_widget(self) -> None:
-        """Create the central widget (placeholder for now)."""
-        central = QWidget(self)
-        central.setStyleSheet("background-color: #f0f0f0;")
-        self.setCentralWidget(central)
+        """Create the central widget with PlanView and PlanSidebar in a splitter."""
+        # Create sidebar and plan view
+        self._sidebar = PlanSidebar()
+        self._plan_view = PlanView(self._plan_vm)
+
+        # Wire PlanView to PlanViewModel for calibration
+        self._plan_vm.set_plan_view(self._plan_view)
+
+        # Create splitter: sidebar left, plan view right
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(self._sidebar)
+        splitter.addWidget(self._plan_view)
+        splitter.setStretchFactor(0, 0)  # sidebar fixed width
+        splitter.setStretchFactor(1, 1)  # plan view stretches
+        self.setCentralWidget(splitter)
+
+        # Connect sidebar signals to PlanViewModel
+        self._sidebar.order_changed.connect(self._plan_vm.on_sidebar_order_changed)
+        self._sidebar.floor_changed.connect(self._plan_vm.on_sidebar_floor_changed)
+        self._sidebar.itemClicked.connect(self._on_sidebar_item_clicked)
+
+        # Connect PlanViewModel signals to sidebar
+        self._plan_vm.pages_changed.connect(self._on_pages_changed)
+        self._plan_vm.pixmap_ready.connect(self._on_pixmap_ready)
 
     def _connect_signals(self) -> None:
         """Connect ViewModel signals to UI slots."""
@@ -326,6 +358,37 @@ class MainWindow(QMainWindow):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def _on_sidebar_item_clicked(self, item) -> None:
+        """Handle sidebar item click - switch active page."""
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if data:
+            self._plan_vm.on_sidebar_page_clicked(data["page_num"])
+
+    def _on_pages_changed(self, pages: list) -> None:
+        """Handle PlanViewModel.pages_changed signal - populate sidebar."""
+        self._sidebar.clear()
+        for page in pages:
+            # Create a placeholder pixmap for the thumbnail
+            from PySide6.QtGui import QPixmap
+            placeholder = QPixmap(120, 120)
+            placeholder.fill(Qt.GlobalColor.lightGray)
+            self._sidebar.add_page(
+                page.page_index,
+                placeholder,
+                page.floor,
+            )
+
+    def _on_pixmap_ready(self, pixmap) -> None:
+        """Handle PlanViewModel.pixmap_ready signal - update sidebar thumbnail."""
+        # Update the active page's thumbnail in the sidebar
+        sorted_pages = self._plan_vm.get_sorted_pages()
+        if not sorted_pages:
+            return
+        active_idx = self._plan_vm.current_page
+        if 0 <= active_idx < len(sorted_pages):
+            page = sorted_pages[active_idx]
+            self._sidebar.add_page(page.page_index, pixmap, page.floor)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""

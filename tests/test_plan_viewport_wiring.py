@@ -84,13 +84,6 @@ class TestMainWindowPlanViewWiring:
     def test_toolbar_has_import_plan_button(self, main_window):
         """Toolbar contains an Import Plan action."""
         window, _ = main_window
-        toolbar = window.findChild(type(window).mro()[0])  # get toolbar
-        # Find the toolbar by name
-        for tb in window.findChildren(type(window.toolbar())) if hasattr(window, 'toolbar') else []:
-            pass
-        # Simpler approach: check all toolbars
-        toolbars = window.findChildren(type(window).findChild(type(QSplitter)))
-        # Actually just check toolbar actions directly
         toolbar_actions = window._toolbar.actions()
         import_found = any(
             "Import Plan" in a.text() for a in toolbar_actions
