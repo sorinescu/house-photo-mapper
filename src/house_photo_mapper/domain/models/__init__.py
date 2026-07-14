@@ -1,5 +1,6 @@
 """Domain models package."""
 
+from house_photo_mapper.domain.models.annotation import AnnotationModel
 from house_photo_mapper.domain.models.coordinate import (
     CoordinateSystem,
     CRSMismatchError,
@@ -10,6 +11,7 @@ from house_photo_mapper.domain.models.photo import DuplicateGroup, ExifModel, Ph
 from house_photo_mapper.domain.models.project import ProjectModel
 
 __all__ = [
+    "AnnotationModel",
     "ProjectModel",
     "CoordinateSystem",
     "CRSMismatchError",
