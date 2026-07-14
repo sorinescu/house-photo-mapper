@@ -42,7 +42,7 @@ expected: Import several photos. Thumbnails appear as actual images, not grey bo
 result: fixed
 reported: "The thumbnails are blank (solid grey boxes)."
 severity: major
-fix: "Changed thumbnail generation to use QImage.loadFromData() instead of raw bytes"
+fix: "Moved QPixmap creation to main thread - QPixmap operations must happen on main thread in Qt"
 
 ### 5. EXIF Metadata Display
 expected: Click on an imported photo in the browser. The metadata panel below shows filename, dimensions, file size, and camera info (if available in the source image).
