@@ -91,6 +91,9 @@ class MainWindowViewModel(QtSafeViewModel):
     def _on_dirty_changed(self, dirty: bool) -> None:
         """Handle dirty state change."""
         self._update_window_title()
+        # Update save button state
+        has_project = self._project_vm.project is not None
+        self.project_vm_changed.emit(self._project_vm)
 
     def _on_error(self, message: str) -> None:
         """Handle error from ProjectViewModel."""

@@ -88,6 +88,7 @@ class ProjectViewModel(QtSafeViewModel):
             # Clear photos and plan for new project
             if self._photo_vm is not None:
                 self._photo_vm._photos.clear()
+                self._photo_vm._thumbnail_generator.clear()
                 self._photo_vm.photos_changed.emit()
                 self.photos_cleared.emit()
             if self._plan_vm is not None:

@@ -63,25 +63,27 @@ class PlanViewModel(QtSafeViewModel):
         # Initialize plan renderer if model has pages
         if model and model.pages:
             self._init_plan_renderer()
+            # Emit pages changed first so sidebar gets populated
+            self.pages_changed.emit(self.get_sorted_pages())
+            # Then set first page and generate thumbnails
             self.set_page(0)
-            # Generate thumbnails for all pages
             self.generate_all_thumbnails()
         else:
             self._plan_renderer = None
-
-        self.pages_changed.emit(self.get_sorted_pages() if model else [])
+            self.pages_changed.emit([])
 
     def _init_plan_renderer(self) -> None:
         """Initialize plan renderer from current plan model's source path."""
         if self._plan_model is None or not self._plan_model.pages:
             return
 
-        # Get source path from first page
         first_page = self._plan_model.pages[0]
-        source_path = first_page.source_path
+
+        # Use original_path if available, otherwise fall back to source_path
+        source_path = first_page.original_path if first_page.original_path else first_page.source_path
 
         # Try to find the full path
-        # First check if it's an absolute path
+        # First check if it's an absolute path that exists
         if Path(source_path).exists():
             full_path = source_path
         else:
@@ -90,8 +92,16 @@ class PlanViewModel(QtSafeViewModel):
             if cwd_path.exists():
                 full_path = str(cwd_path)
             else:
-                # Can't find the source file
-                return
+                # Try to find in project directory
+                # Look for the file in common locations
+                for search_dir in [Path.cwd(), Path.cwd() / "plans", Path.cwd() / "assets"]:
+                    candidate = search_dir / source_path
+                    if candidate.exists():
+                        full_path = str(candidate)
+                        break
+                else:
+                    # Can't find the source file
+                    return
 
         try:
             from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
@@ -348,6 +358,7 @@ class PlanViewModel(QtSafeViewModel):
             pages = [
                 PageModel(
                     source_path=Path(pdf_path).name,
+                    original_path=pdf_path,
                     page_index=i,
                     order=i,
                 )
@@ -377,6 +388,7 @@ class PlanViewModel(QtSafeViewModel):
 
             page = PageModel(
                 source_path=Path(image_path).name,
+                original_path=image_path,
                 page_index=0,
                 order=0,
             )
@@ -468,12 +480,16 @@ class PlanViewModel(QtSafeViewModel):
 
         Uses a smaller size for sidebar thumbnails (120x120).
         Emits thumbnail_ready for each page as it completes.
+        Skips the first page if it's already the active page.
         """
         if self._plan_model is None or self._plan_renderer is None:
             return
 
         sorted_pages = self._plan_model.get_sorted_pages()
         for idx, page in enumerate(sorted_pages):
+            # Skip first page if it's already rendered as the active page
+            if idx == 0 and self._current_page_index == 0:
+                continue
             try:
                 # Render at lower DPI for thumbnail
                 pixmap = self._plan_renderer.render_page(page.page_index, dpi=72)
