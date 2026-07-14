@@ -14,7 +14,7 @@ HousePhotoMapper delivers a professional desktop application for correlating bui
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Core Architecture** - Project scaffolding, MVVM skeleton, coordinate system, macOS app bundle (completed 2026-07-13)
-- [x] **Phase 2: Plan System** - PDF/PNG/JPG import, multi-page navigation, zoom/pan/rotate, tile pyramid rendering (completed 2026-07-13)
+- [x] **Phase 2: Plan System** - PDF/PNG/JPG import, multi-page navigation, zoom/pan/rotate, tile pyramid rendering (completed 2026-07-14)
 - [ ] **Phase 3: Photo System** - Drag-drop/folder import, EXIF extraction, duplicate detection, lazy-loaded thumbnails
 - [ ] **Phase 4: Annotation Tools** - Camera marker, direction arrow, viewing cone, visible polygon, metadata, undo/redo, shortcuts
 - [ ] **Phase 5: Project Persistence & Performance** - JSON serialization, auto-save, crash recovery, dark/light mode, <100ms viewport
@@ -71,7 +71,7 @@ Plans:
 - [x] 02-05-PLAN.md
 - [x] 02-06-PLAN.md
 - [x] 02-07-PLAN.md
-- [ ] 02-08-PLAN.md
+- [x] 02-08-PLAN.md
 
 - [x] 02-01: PyMuPDF integration — PDF document model, page rendering to QImage, tile pyramid generator
 - [x] 02-02: Plan viewport — QGraphicsScene with NoIndex mode, PlanViewVM, zoom/pan/rotate handlers
@@ -80,7 +80,7 @@ Plans:
 - [x] 02-05: PlanModel persistence — serialization to project JSON, coordinate transform storage
 - [x] 02-06: Import Plan UI wiring — File menu action, QFileDialog, extension routing to PlanViewModel (gap closure)
 - [x] 02-07: Gap closure verification — verify import UI works, update UAT status (gap closure)
-- [ ] 02-08: PlanView viewport wiring — instantiate PlanView in MainWindow, wire PlanViewModel, add toolbar button (gap closure)
+- [x] 02-08: PlanView viewport wiring — instantiate PlanView in MainWindow, wire PlanViewModel, add toolbar button (gap closure)
 
 ### Phase 3: Photo System
 
@@ -96,15 +96,17 @@ Plans:
   5. Thumbnails load lazily in background without blocking UI, support virtual scrolling for 1000+ photos
   6. HEIC photos import correctly via pillow-heif
 
-**Plans**: TBD
+**Plans**: 7 plans
 
 Plans:
 
-- [ ] 03-01: Photo import pipeline — drag-drop handler, folder scanner (recursive), Pillow + pillow-heif loader
-- [ ] 03-02: EXIF extraction — piexif/pillow metadata parsing, orientation correction (8 EXIF orientations), GPS handling
-- [ ] 03-03: Duplicate detection — perceptual hash (pHash) computation, size check, user review UI for matches
-- [ ] 03-04: Thumbnail system — setScaledSize() for memory efficiency, LRU memory/disk cache, background EXIF pool
-- [ ] 03-05: PhotoBrowserVM — virtual scrolling model, metadata display, annotated/unannotated status badges
+- [ ] 03-01: Photo models & dependencies — PhotoModel, ExifModel, DuplicateGroup, install imagehash + pillow-heif
+- [ ] 03-02: Photo import pipeline — PhotoImporter service, drag-drop handler, recursive folder scan
+- [ ] 03-03: EXIF extraction — ExifExtractor service, GPS rational conversion, orientation handling
+- [ ] 03-04: Thumbnail system — ThumbnailGenerator with QThreadPool, LRU memory cache, disk cache
+- [ ] 03-05: Duplicate detection — DuplicateDetector with dHash, review dialog
+- [ ] 03-06: PhotoBrowserVM & UI — PhotoViewModel, PhotoBrowser, PhotoMetadataPanel, MainWindow integration
+- [ ] 03-07: Photo persistence & verification — photos.json persistence, full success criteria verification
 
 ### Phase 4: Annotation Tools
 
