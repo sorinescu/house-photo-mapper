@@ -13,13 +13,17 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStatusBar,
     QToolBar,
+    QVBoxLayout,
     QWidget,
 )
 
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import SUPPORTED_FORMATS
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
+from house_photo_mapper.presentation.viewmodels.photo_vm import PhotoViewModel
 from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+from house_photo_mapper.presentation.views.photo_browser import PhotoBrowser
+from house_photo_mapper.presentation.views.photo_metadata import PhotoMetadataPanel
 from house_photo_mapper.presentation.views.plan_sidebar import PlanSidebar
 from house_photo_mapper.presentation.views.plan_view import PlanView
 
@@ -68,6 +72,9 @@ class MainWindow(QMainWindow):
         # Create PlanViewModel and wire to ProjectViewModel
         self._plan_vm = PlanViewModel()
         self._vm.project_vm.set_plan_vm(self._plan_vm)
+
+        # Create PhotoViewModel
+        self._photo_vm = PhotoViewModel()
 
         self.setWindowTitle("HousePhotoMapper")
         self.resize(1200, 800)
@@ -289,7 +296,7 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("Ready")
 
     def _create_central_widget(self) -> None:
-        """Create the central widget with PlanView and PlanSidebar in a splitter."""
+        """Create the central widget with PlanView, PlanSidebar, and PhotoBrowser in a splitter."""
         # Create sidebar and plan view
         self._sidebar = PlanSidebar()
         self._plan_view = PlanView(self._plan_vm)
@@ -297,12 +304,25 @@ class MainWindow(QMainWindow):
         # Wire PlanView to PlanViewModel for calibration
         self._plan_vm.set_plan_view(self._plan_view)
 
-        # Create splitter: sidebar left, plan view right
+        # Create photo browser and metadata panel
+        self._photo_browser = PhotoBrowser()
+        self._photo_metadata = PhotoMetadataPanel()
+
+        # Create right panel for photos
+        photo_panel = QWidget()
+        photo_layout = QVBoxLayout(photo_panel)
+        photo_layout.setContentsMargins(0, 0, 0, 0)
+        photo_layout.addWidget(self._photo_browser)
+        photo_layout.addWidget(self._photo_metadata)
+
+        # Create splitter: sidebar left, plan view center, photos right
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._sidebar)
         splitter.addWidget(self._plan_view)
+        splitter.addWidget(photo_panel)
         splitter.setStretchFactor(0, 0)  # sidebar fixed width
         splitter.setStretchFactor(1, 1)  # plan view stretches
+        splitter.setStretchFactor(2, 0)  # photo panel fixed width
         self.setCentralWidget(splitter)
 
         # Connect sidebar signals to PlanViewModel
@@ -313,6 +333,13 @@ class MainWindow(QMainWindow):
         # Connect PlanViewModel signals to sidebar
         self._plan_vm.pages_changed.connect(self._on_pages_changed)
         self._plan_vm.pixmap_ready.connect(self._on_pixmap_ready)
+
+        # Connect PhotoViewModel signals to photo browser and metadata
+        self._photo_vm.photo_added.connect(self._on_photo_added)
+        self._photo_vm.thumbnail_ready.connect(self._photo_browser.update_thumbnail)
+        self._photo_vm.duplicates_found.connect(self._on_duplicates_found)
+        self._photo_vm.metadata_changed.connect(self._photo_metadata.update_metadata)
+        self._photo_browser.itemClicked.connect(self._on_photo_clicked)
 
     def _connect_signals(self) -> None:
         """Connect ViewModel signals to UI slots."""
@@ -446,6 +473,25 @@ class MainWindow(QMainWindow):
                     )
                     item.setIcon(QIcon(scaled_pixmap))
                     break
+
+    @Slot(object)
+    def _on_photo_added(self, photo) -> None:
+        """Handle PhotoViewModel.photo_added signal - add photo to browser."""
+        self._photo_browser.add_photo(photo.path)
+
+    @Slot(list)
+    def _on_duplicates_found(self, groups) -> None:
+        """Handle PhotoViewModel.duplicates_found signal - mark duplicates in browser."""
+        for group in groups:
+            for path in group.photo_paths:
+                self._photo_browser.mark_duplicate(path, group.group_id)
+
+    @Slot(object)
+    def _on_photo_clicked(self, item) -> None:
+        """Handle photo browser item click - select photo."""
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if path:
+            self._photo_vm.select_photo(path)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""
