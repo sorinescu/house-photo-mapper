@@ -1,7 +1,7 @@
 """Tests for CameraOverlay service."""
 
 import math
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -12,7 +12,7 @@ class TestCameraOverlay:
     """Tests for CameraOverlay static methods."""
 
     def test_compute_cone_vertices_zero_angle(self) -> None:
-        """Test cone vertices with direction_angle=0 (pointing right)."""
+        """Cone vertices with direction_angle=0 (pointing right) are correct."""
         left, right = CameraOverlay.compute_cone_vertices(
             center_x=100.0,
             center_y=100.0,
@@ -32,7 +32,7 @@ class TestCameraOverlay:
         assert right[1] == pytest.approx(expected_right_y)
 
     def test_compute_cone_vertices_ninety_degrees(self) -> None:
-        """Test cone vertices with direction_angle=90 (pointing up)."""
+        """Cone vertices with direction_angle=90 (pointing up) are correct."""
         left, right = CameraOverlay.compute_cone_vertices(
             center_x=100.0,
             center_y=100.0,
@@ -52,7 +52,7 @@ class TestCameraOverlay:
         assert right[1] == pytest.approx(expected_right_y)
 
     def test_invalid_cone_angle(self) -> None:
-        """Test ValueError raised for cone_angle <= 0."""
+        """ValueError raised for cone_angle <= 0."""
         with pytest.raises(ValueError, match="cone_angle"):
             CameraOverlay.compute_cone_vertices(
                 center_x=100.0,
@@ -63,7 +63,7 @@ class TestCameraOverlay:
             )
 
     def test_invalid_cone_length(self) -> None:
-        """Test ValueError raised for cone_length <= 0."""
+        """ValueError raised for cone_length <= 0."""
         with pytest.raises(ValueError, match="cone_length"):
             CameraOverlay.compute_cone_vertices(
                 center_x=100.0,
@@ -74,7 +74,7 @@ class TestCameraOverlay:
             )
 
     def test_draw_camera_overlay(self) -> None:
-        """Test draw_camera_overlay calls canvas methods correctly."""
+        """draw_camera_overlay uses canvas.saveState/restoreState and draws elements."""
         mock_canvas = MagicMock()
 
         CameraOverlay.draw_camera_overlay(
