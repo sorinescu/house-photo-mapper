@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QColor, QPalette
 
 
@@ -164,6 +164,9 @@ class ThemeManager(QObject):
     # Signal emitted when theme changes
     theme_changed = Signal(ThemeMode)
     
+    # Signal emitted when system theme changes
+    system_theme_changed = Signal(ThemeMode)
+    
     def __init__(self, parent: QObject | None = None) -> None:
         """Initialize ThemeManager.
         
@@ -186,6 +189,9 @@ class ThemeManager(QObject):
         
         # System theme detection
         self._system_theme = self._detect_system_theme()
+        
+        # System theme monitoring
+        self._monitoring_system_theme = False
     
     def _detect_system_theme(self) -> ThemeMode:
         """Detect the current system theme.
@@ -327,3 +333,54 @@ class ThemeManager(QObject):
         if app:
             palette = self.get_qpalette()
             app.setPalette(palette)
+    
+    def start_monitoring_system_theme(self) -> None:
+        """Start monitoring for system theme changes.
+        
+        This connects to the application's paletteChange signal to detect
+        when the OS theme changes (e.g., macOS dark mode toggle).
+        """
+        if self._monitoring_system_theme:
+            return
+        
+        from PySide6.QtWidgets import QApplication
+        
+        app = QApplication.instance()
+        if app:
+            app.paletteChanged.connect(self._on_system_palette_changed)
+            self._monitoring_system_theme = True
+    
+    def stop_monitoring_system_theme(self) -> None:
+        """Stop monitoring for system theme changes."""
+        if not self._monitoring_system_theme:
+            return
+        
+        from PySide6.QtWidgets import QApplication
+        
+        app = QApplication.instance()
+        if app:
+            try:
+                app.paletteChanged.disconnect(self._on_system_palette_changed)
+            except RuntimeError:
+                # Signal wasn't connected
+                pass
+            self._monitoring_system_theme = False
+    
+    @Slot(QPalette)
+    def _on_system_palette_changed(self, palette: QPalette) -> None:
+        """Handle system palette change.
+        
+        Args:
+            palette: New system palette.
+        """
+        # Detect new system theme
+        new_theme = self._detect_system_theme()
+        
+        # Only emit if theme actually changed
+        if new_theme != self._system_theme:
+            self._system_theme = new_theme
+            self.system_theme_changed.emit(new_theme)
+            
+            # If currently using system theme, emit theme_changed
+            if self._current_mode == ThemeMode.SYSTEM:
+                self.theme_changed.emit(self._current_mode)
