@@ -1,5 +1,6 @@
 """Infrastructure package."""
 
+from house_photo_mapper.infrastructure.autosave import AutoSaveManager
 from house_photo_mapper.infrastructure.logging import bind_context, configure_logging, get_logger
 from house_photo_mapper.infrastructure.platform import (
     get_app_data_dir,
@@ -17,6 +18,7 @@ from house_photo_mapper.infrastructure.qt_patterns import (
 )
 
 __all__ = [
+    "AutoSaveManager",
     "configure_logging",
     "get_logger",
     "bind_context",
