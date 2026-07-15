@@ -152,10 +152,10 @@ Plans:
 
 Plans:
 
-- [ ] 05-01: PersistenceService — atomic JSON writes, .bak files, schema versioning, streaming for large arrays
-- [ ] 05-02: Auto-save — QTimer 2-minute interval, background serialization, dirty flag tracking
+- [x] 05-01: PersistenceService — atomic JSON writes, .bak files, schema versioning, streaming for large arrays
+- [x] 05-02: Auto-save — QTimer 2-minute interval, background serialization, dirty flag tracking
 - [x] 05-03: Crash recovery — startup scan for .bak/auto-save, recovery dialog, data integrity verification
-- [ ] 05-04: Theme system — QPalette-based dark/light, stylesheet variables, OS preference detection, persistence
+- [x] 05-04: Theme system — QPalette-based dark/light, stylesheet variables, OS preference detection, persistence
 - [ ] 05-05: Performance baseline — LRU image cache tuning, QGraphicsScene item recycling, benchmark harness
 
 ### Phase 6: Report Generation

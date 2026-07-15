@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: In progress
-last_updated: "2026-07-15T05:50:09Z"
+last_updated: "2026-07-15T06:07:28Z"
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 40
-  completed_plans: 27
-  percent: 68
+  completed_plans: 28
+  percent: 70
 ---
 
 # Project State: HousePhotoMapper
@@ -23,10 +23,10 @@ progress:
 ## Current Position
 
 - **Phase**: 5 of 7 — Project Persistence & Performance (in progress)
-- **Plan**: 3 of 5 — Phase 5 plan 03 complete
-- **Status**: Phase 5 in progress, plan 03 complete
-- **Last Activity**: Crash recovery infrastructure implemented
-- **Progress**: 68% (27/40 plans completed)
+- **Plan**: 4 of 5 — Phase 5 plan 04 complete
+- **Status**: Phase 5 in progress, plan 04 complete
+- **Last Activity**: Theme system implemented
+- **Progress**: 70% (28/40 plans completed)
 
 ```
 Progress: [███████████████░░░░░] 68%
@@ -56,6 +56,8 @@ Progress: [███████████████░░░░░] 68%
 - Pydantic PrivateAttr for non-serialized model state (ProjectModel._dirty)
 - RecoveryScanner scans app data dir + recent project parent dirs for .bak files
 - 24-hour cutoff for recoverable .bak files, 7-day automatic cleanup
+- ThemeManager with QPalette-based dark/light mode switching
+- System theme detection via QApplication palette brightness
 
 ### Pending Todos
 
@@ -72,5 +74,5 @@ Progress: [███████████████░░░░░] 68%
 ## Session Continuity
 
 - **Last Session**: 2026-07-15 (Phase 5 execution)
-- **Stopped At**: Plan 05-03 complete (crash recovery)
+- **Stopped At**: Plan 05-04 complete (theme system)
 - **Resume File**: None
