@@ -7,6 +7,7 @@ logging metrics to a structured file, and a CLI flag to enable benchmarking.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from collections.abc import Callable
@@ -14,9 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypeVar
 
-from house_photo_mapper.infrastructure.logging import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -94,7 +93,7 @@ class PerformanceBenchmark:
             **extra,
         }
         self._metrics.append(metric)
-        logger.debug("benchmark_record", operation=operation, duration_ms=duration_ms)
+        logger.debug("benchmark_record operation=%s duration_ms=%.3f", operation, duration_ms)
 
         if self._log_path:
             self._flush(metric)
@@ -107,7 +106,7 @@ class PerformanceBenchmark:
             with open(self._log_path, "a") as f:
                 f.write(json.dumps(metric) + "\n")
         except OSError:
-            logger.warning("benchmark_flush_failed", path=str(self._log_path))
+            logger.warning("benchmark_flush_failed path=%s", self._log_path)
 
     def get_metrics(self, operation: str | None = None) -> list[dict[str, Any]]:
         """Get recorded metrics, optionally filtered by operation.

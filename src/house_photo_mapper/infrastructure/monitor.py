@@ -7,15 +7,15 @@ Logs warnings when operations exceed the 100ms threshold.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
 from contextlib import contextmanager
 from typing import Any
 
 from house_photo_mapper.infrastructure.benchmark import PerformanceBenchmark, get_benchmark
-from house_photo_mapper.infrastructure.logging import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Default warning threshold in milliseconds
 DEFAULT_WARNING_THRESHOLD_MS = 100.0
@@ -122,10 +122,10 @@ class PerformanceMonitor:
         threshold = warn_threshold_ms if warn_threshold_ms is not None else self._warning_threshold_ms
         if duration_ms > threshold:
             logger.warning(
-                "slow_operation",
-                operation=operation,
-                duration_ms=round(duration_ms, 2),
-                threshold_ms=threshold,
+                "slow_operation operation=%s duration_ms=%.2f threshold_ms=%.1f",
+                operation,
+                duration_ms,
+                threshold,
             )
 
     def get_stats(self, operation: str) -> dict[str, Any]:
