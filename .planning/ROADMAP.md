@@ -186,9 +186,16 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 06-01-PLAN.md — Install reportlab, create PlanSnippet + CameraOverlay domain services
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-02-PLAN.md — ReportGeneratorService, ReportViewModel, LayoutDialog
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 06-03-PLAN.md — ReportProgressDialog, MainWindow integration, end-to-end flow
 
 ### Phase 7: Polish, Packaging & Ship

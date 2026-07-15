@@ -489,20 +489,20 @@ def extract_plan_snippet(pdf_path, page_index, camera_x, camera_y,
 
 ## Open Questions
 
-1. **Plan snippet zoom radius**
+1. **Plan snippet zoom radius** (RESOLVED)
    - What we know: Camera position and viewing cone are defined in scene coordinates
    - What's unclear: How much of the plan to show around each camera (zoom_radius in meters)
-   - Recommendation: Use 5m default radius, make configurable via ExportSettings
+   - Resolution: Use 5m default radius, make configurable via ExportSettings. Implemented in PlanSnippet dataclass with radius_meters field.
 
-2. **Photo aspect ratio handling**
+2. **Photo aspect ratio handling** (RESOLVED)
    - What we know: Photos can be any aspect ratio (landscape, portrait, square)
    - What's unclear: Should photos be cropped to fit or letterboxed?
-   - Recommendation: Use `preserveAspectRatio=True` with `anchor='nw'` — no cropping, centered in allocated space
+   - Resolution: Use `preserveAspectRatio=True` with `anchor='nw'` — no cropping, centered in allocated space. Per D-01 decision and RESEARCH Pattern 1.
 
-3. **Report title page**
+3. **Report title page** (RESOLVED)
    - What we know: ExportSettings has `report_title`, `report_subtitle`, `report_author`
    - What's unclear: Should there be a dedicated title page before the photo pages?
-   - Recommendation: Include optional title page if `report_title` is non-empty
+   - Resolution: Defer title page to future phase. Phase 6 delivers per-annotation pages only. Title/subtitle/author fields in ExportSettings remain available for future use.
 
 ## Environment Availability
 
