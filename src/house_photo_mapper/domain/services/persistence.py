@@ -131,6 +131,13 @@ class PersistenceService:
         project.path = path
         project.mark_clean()
         self._add_recent_project(path)
+
+        # Log data integrity warnings
+        warnings = self._validate_project_data(project)
+        if warnings:
+            for warning in warnings:
+                logger.warning("Data integrity: %s", warning)
+
         return project
 
     def load_project_from_backup(self, bak_path: str) -> ProjectModel:
@@ -212,14 +219,33 @@ class PersistenceService:
         Returns:
             List of warning messages for data inconsistencies.
         """
+        return self._validate_project_data(project)
+
+    def _validate_project_data(self, project: ProjectModel) -> list[str]:
+        """Validate project data integrity and return warnings.
+
+        Checks:
+        - JSON structure (required fields present)
+        - Annotation references (photo_path exists in photos list)
+        - Photo data completeness (path field present)
+        - Annotation data completeness (required fields present)
+
+        Args:
+            project: ProjectModel to validate.
+
+        Returns:
+            List of warning messages for data inconsistencies.
+        """
         warnings: list[str] = []
 
         # Check JSON structure - basic field presence
         if not hasattr(project, "schema_version"):
             warnings.append("Missing schema_version field")
 
-        # Validate annotation references
+        # Build photo path index for reference validation
         photo_paths = {p.get("path", "") for p in project.photos}
+
+        # Validate annotation references
         for i, annotation in enumerate(project.annotations):
             photo_path = annotation.get("photo_path", "")
             if photo_path and photo_path not in photo_paths:
@@ -231,6 +257,13 @@ class PersistenceService:
         for i, photo in enumerate(project.photos):
             if not photo.get("path"):
                 warnings.append(f"Photo {i} missing path field")
+
+        # Check for required fields in annotations
+        for i, annotation in enumerate(project.annotations):
+            if not annotation.get("annotation_id"):
+                warnings.append(f"Annotation {i} missing annotation_id field")
+            if not annotation.get("position"):
+                warnings.append(f"Annotation {i} missing position field")
 
         return warnings
 
