@@ -20,6 +20,10 @@ from PySide6.QtWidgets import (
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import SUPPORTED_FORMATS
 from house_photo_mapper.infrastructure.autosave import AutoSaveManager
+from house_photo_mapper.infrastructure.logging import get_logger
+from house_photo_mapper.infrastructure.platform import get_app_data_dir
+from house_photo_mapper.infrastructure.recovery import RecoveryScanner
+from house_photo_mapper.presentation.views.recovery_dialog import RecoveryDialog
 from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
 from house_photo_mapper.presentation.viewmodels.photo_vm import PhotoViewModel
@@ -113,6 +117,9 @@ class MainWindow(QMainWindow):
         # Start auto-save timer if project is loaded
         self._vm.project_vm_changed.connect(self._on_project_changed_autosave)
 
+        # Scan for crash recovery on startup
+        self._scan_for_recovery()
+
     def _restore_state(self) -> None:
         """Restore window geometry and state from QSettings."""
         geometry = self._persistence.load_window_geometry()
@@ -122,6 +129,62 @@ class MainWindow(QMainWindow):
         state = self._persistence.load_window_state()
         if state:
             self.restoreState(state)
+
+    def _scan_for_recovery(self) -> None:
+        """Scan for .bak files and show recovery dialog if found."""
+        logger = get_logger(__name__)
+
+        try:
+            scanner = RecoveryScanner(
+                app_data_dir=get_app_data_dir(),
+                recent_projects=self._persistence.get_recent_projects(),
+            )
+
+            # Clean up old backups first
+            scanner.cleanup_old_backups()
+
+            # Scan for recoverable projects
+            recoverable = scanner.scan_for_recoverable()
+
+            if not recoverable:
+                logger.debug("No recoverable projects found")
+                return
+
+            logger.info("Found %d recoverable project(s)", len(recoverable))
+
+            # Show recovery dialog
+            dialog = RecoveryDialog(recoverable, parent=self)
+            dialog.recovery_selected.connect(self._on_recovery_selected)
+            dialog.exec()
+
+        except Exception as e:
+            logger.warning("Recovery scan failed: %s", e)
+            # Don't block startup on recovery scan failure
+
+    @Slot(list)
+    def _on_recovery_selected(self, bak_paths: list) -> None:
+        """Handle recovery selection from dialog.
+
+        Args:
+            bak_paths: List of .bak file paths to recover.
+        """
+        logger = get_logger(__name__)
+
+        for bak_path in bak_paths:
+            try:
+                project = self._persistence.recover_project(str(bak_path))
+                # Open the recovered project
+                self._vm.project_vm.load_project(project)
+                logger.info("Recovered project: %s", project.project_name)
+                # Only recover the first one
+                break
+            except Exception as e:
+                logger.error("Failed to recover %s: %s", bak_path, e)
+                QMessageBox.warning(
+                    self,
+                    "Recovery Failed",
+                    f"Failed to recover project:\n{e}",
+                )
 
     def _setup_ui(self) -> None:
         """Set up menus, toolbars, status bar, and central widget."""
