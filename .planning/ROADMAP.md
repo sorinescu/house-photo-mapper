@@ -183,15 +183,13 @@ Plans:
   6. Report generates in background without freezing UI; 50-photo report completes in <30 seconds
   7. Camera symbol and viewing cone render correctly at plan scale on the plan snippet
 
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 
-- [ ] 06-01: ReportLab template engine — fixed templates first (per research: DSL only if needed in v1.1)
-- [ ] 06-02: Plan snippet extraction — render plan region around camera at report DPI, camera symbol + cone overlay
-- [ ] 06-03: Per-photo page composition — small tables (ReportLab O(n²) avoidance), pre-calculated heights
-- [ ] 06-04: Background generation — ProcessPoolExecutor, progress dialog, cancellation support
-- [ ] 06-05: Layout options — A4 Portrait/Landscape, Letter, margins, figure numbering, export settings persistence
+- [ ] 06-01-PLAN.md — Install reportlab, create PlanSnippet + CameraOverlay domain services
+- [ ] 06-02-PLAN.md — ReportGeneratorService, ReportViewModel, LayoutDialog
+- [ ] 06-03-PLAN.md — ReportProgressDialog, MainWindow integration, end-to-end flow
 
 ### Phase 7: Polish, Packaging & Ship
 
