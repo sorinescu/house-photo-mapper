@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import SUPPORTED_FORMATS
+from house_photo_mapper.infrastructure.autosave import AutoSaveManager
 from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
 from house_photo_mapper.presentation.viewmodels.photo_vm import PhotoViewModel
@@ -93,9 +94,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("HousePhotoMapper")
         self.resize(1200, 800)
 
+        # Auto-save manager
+        self._autosave = AutoSaveManager(self._vm.project_vm, parent=self)
+        self._autosave.save_started.connect(self._on_autosave_started)
+        self._autosave.save_completed.connect(self._on_autosave_completed)
+
         self._setup_ui()
         self._connect_signals()
         self._restore_state()
+
+        # Start auto-save timer if project is loaded
+        self._vm.project_vm_changed.connect(self._on_project_changed_autosave)
 
     def _restore_state(self) -> None:
         """Restore window geometry and state from QSettings."""
@@ -440,6 +449,16 @@ class MainWindow(QMainWindow):
         self._vm.status_message_changed.connect(self._status_bar.showMessage)
         self._vm.project_vm_changed.connect(self._on_project_changed)
 
+        # Auto-save: connect dirty_changed to start timer on first dirty
+        self._vm.project_vm.dirty_changed.connect(self._on_dirty_changed)
+
+    @Slot(bool)
+    def _on_dirty_changed(self, dirty: bool) -> None:
+        """Start auto-save timer when project becomes dirty."""
+        if dirty and self._vm.project_vm.project is not None:
+            if not self._autosave.is_saving:
+                self._autosave.start()
+
     @Slot(object)
     def _on_project_changed(self, project_vm: "ProjectViewModel") -> None:
         """Handle project change signal."""
@@ -448,6 +467,28 @@ class MainWindow(QMainWindow):
         self._save_as_action.setEnabled(has_project)
         self._close_action.setEnabled(has_project)
         self._tb_save.setEnabled(has_project)
+
+    @Slot(object)
+    def _on_project_changed_autosave(self, project_vm: "ProjectViewModel") -> None:
+        """Start or stop auto-save based on project state."""
+        has_project = project_vm.project is not None
+        if has_project:
+            self._autosave.start()
+        else:
+            self._autosave.stop()
+
+    @Slot()
+    def _on_autosave_started(self) -> None:
+        """Show save indicator in status bar."""
+        self._status_bar.showMessage("Auto-saving...")
+
+    @Slot(bool, str)
+    def _on_autosave_completed(self, success: bool, error_message: str) -> None:
+        """Update status bar after auto-save completes."""
+        if success:
+            self._status_bar.showMessage("Auto-saved.", 2000)
+        else:
+            self._status_bar.showMessage(f"Auto-save failed: {error_message}", 5000)
 
     def _update_recent_menu(self, recent_projects: list[str]) -> None:
         """Update the Recent Projects submenu."""
