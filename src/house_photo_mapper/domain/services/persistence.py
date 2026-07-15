@@ -1,7 +1,11 @@
-"""PersistenceService - Handles JSON file I/O and QSettings for window state."""
+"""PersistenceService - Handles JSON file I/O, atomic writes, .bak files, and schema versioning."""
 
 from __future__ import annotations
 
+import json
+import logging
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +14,13 @@ from PySide6.QtCore import QSettings
 from house_photo_mapper.domain.models.photo import PhotoModel
 from house_photo_mapper.domain.models.plan import PlanModel
 from house_photo_mapper.domain.models.project import ProjectModel
+from house_photo_mapper.domain.models.project_schema import (
+    SCHEMA_VERSION,
+    migrate_schema,
+    validate_schema_version,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class PersistenceService:
@@ -17,6 +28,8 @@ class PersistenceService:
 
     Handles:
     - Project JSON serialization/deserialization (atomic writes)
+    - .bak file management (keeps previous save as backup)
+    - Schema version checking on load with forward/backward compatibility
     - Recent projects list via QSettings
     - Window geometry and state via QSettings
     - Last opened directory for file dialogs
@@ -32,7 +45,13 @@ class PersistenceService:
         )
 
     def save_project(self, project: ProjectModel) -> None:
-        """Save project to its path atomically.
+        """Save project to its path atomically with .bak backup.
+
+        The save process:
+        1. If the target file exists, copy it to .bak (previous save backup)
+        2. Write JSON to .tmp file (atomic write staging)
+        3. Rename .tmp to target (atomic on same filesystem)
+        4. Mark project clean and update recent projects
 
         Args:
             project: ProjectModel to save.
@@ -47,16 +66,40 @@ class PersistenceService:
         path = Path(project.path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Update timestamps
+        now = datetime.now(timezone.utc).isoformat()
+        project.ui_state.setdefault("_last_saved", now)
+
+        # Create .bak backup of previous save
+        if path.exists():
+            bak_path = path.with_suffix(".hpmpj.bak")
+            try:
+                shutil.copy2(path, bak_path)
+            except OSError:
+                logger.warning("Failed to create .bak backup for %s", path)
+
         # Atomic write: write to .tmp then rename
         tmp_path = path.with_suffix(".tmp")
-        tmp_path.write_text(project.model_dump_json(indent=2))
-        tmp_path.replace(path)
+        try:
+            tmp_path.write_text(project.model_dump_json(indent=2))
+            tmp_path.replace(path)
+        except OSError:
+            # Clean up .tmp on failure
+            tmp_path.unlink(missing_ok=True)
+            raise
 
         project.mark_clean()
         self._add_recent_project(str(path))
 
     def load_project(self, path: str) -> ProjectModel:
-        """Load and validate project from file.
+        """Load and validate project from file with schema version checking.
+
+        The load process:
+        1. Read JSON from file
+        2. Validate schema_version is supported (not newer than current)
+        3. Run any necessary schema migrations
+        4. Deserialize into ProjectModel with Pydantic validation
+        5. If schema_version is missing (legacy file), default to version 1
 
         Args:
             path: Path to .hpmpj project file.
@@ -66,13 +109,55 @@ class PersistenceService:
 
         Raises:
             FileNotFoundError: If file doesn't exist.
+            ValueError: If schema version is newer than supported.
             ValidationError: If JSON doesn't match schema.
         """
-        data = Path(path).read_text()
-        project = ProjectModel.model_validate_json(data)
+        raw_data = json.loads(Path(path).read_text())
+
+        # Schema version check — handle both versioned and legacy files
+        file_version = raw_data.get("schema_version", 1)
+        validate_schema_version(file_version)
+
+        # Run any necessary migrations
+        if file_version < SCHEMA_VERSION:
+            raw_data = migrate_schema(raw_data, file_version)
+            logger.info(
+                "Migrated project schema from v%d to v%d",
+                file_version,
+                SCHEMA_VERSION,
+            )
+
+        project = ProjectModel.model_validate(raw_data)
         project.path = path
         project.mark_clean()
         self._add_recent_project(path)
+        return project
+
+    def load_project_from_backup(self, bak_path: str) -> ProjectModel:
+        """Load project from .bak backup file.
+
+        Args:
+            bak_path: Path to the .hpmpj.bak backup file.
+
+        Returns:
+            Validated ProjectModel instance.
+
+        Raises:
+            FileNotFoundError: If backup file doesn't exist.
+        """
+        # Convert .bak path to main project path for ProjectModel.path
+        main_path = bak_path.replace(".hpmpj.bak", ".hpmpj")
+        raw_data = json.loads(Path(bak_path).read_text())
+
+        file_version = raw_data.get("schema_version", 1)
+        validate_schema_version(file_version)
+
+        if file_version < SCHEMA_VERSION:
+            raw_data = migrate_schema(raw_data, file_version)
+
+        project = ProjectModel.model_validate(raw_data)
+        project.path = main_path
+        project.mark_clean()
         return project
 
     def save_project_as(self, project: ProjectModel, new_path: str) -> None:
@@ -137,8 +222,6 @@ class PersistenceService:
         photos_data = [photo.to_project_json() for photo in photos]
 
         # Atomic write: write to .tmp then rename
-        import json
-
         tmp_path = photos_path.with_suffix(".tmp")
         tmp_path.write_text(json.dumps(photos_data, indent=2))
         tmp_path.replace(photos_path)
@@ -158,8 +241,6 @@ class PersistenceService:
         photos_path = project_dir / "photos.json"
         if not photos_path.exists():
             return None
-
-        import json
 
         photos_data = json.loads(photos_path.read_text())
         return [PhotoModel.from_project_json(data) for data in photos_data]
