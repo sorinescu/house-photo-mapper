@@ -123,6 +123,12 @@ class MainWindow(QMainWindow):
         # Start auto-save timer if project is loaded
         self._vm.project_vm_changed.connect(self._on_project_changed_autosave)
 
+        # Apply initial theme
+        self._theme_manager.apply_theme()
+        
+        # Start monitoring system theme changes
+        self._theme_manager.start_monitoring_system_theme()
+
         # Scan for crash recovery on startup
         self._scan_for_recovery()
 
