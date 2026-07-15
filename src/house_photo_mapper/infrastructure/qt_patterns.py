@@ -411,3 +411,39 @@ class PlanGraphicsView(QGraphicsView):
         # ppm = 1 / scale if scene units are meters
         ppm = 1.0 / scale if scale != 0 else 1.0
         return ppm, scene_origin
+
+    def apply_viewport_culling(self) -> int:
+        """Hide items outside the visible viewport rect for performance.
+
+        When many annotations exist (100+), items far from the viewport
+        don't need to be rendered. This method sets isVisible(False) on
+        items outside a padded viewport rect, skipping the pixmap background.
+
+        Returns:
+            Number of items culled (hidden).
+        """
+        from PySide6.QtWidgets import QGraphicsPixmapItem
+
+        viewport_rect = self.mapToScene(self.viewport().rect()).boundingRect()
+        # Pad the culling rect by 20% to avoid popping at edges
+        margin_x = viewport_rect.width() * 0.2
+        margin_y = viewport_rect.height() * 0.2
+        cull_rect = viewport_rect.adjusted(-margin_x, -margin_y, margin_x, margin_y)
+
+        culled = 0
+        for item in self.scene().items():
+            # Skip the background pixmap — always visible
+            if isinstance(item, QGraphicsPixmapItem):
+                item.setVisible(True)
+                continue
+
+            item_rect = item.boundingRect()
+            # Map item rect to scene coordinates (handles nested groups)
+            scene_rect = item.mapToScene(item_rect).boundingRect()
+            visible = cull_rect.intersects(scene_rect)
+            if not visible and item.isVisible():
+                item.setVisible(False)
+                culled += 1
+            elif visible and not item.isVisible():
+                item.setVisible(True)
+        return culled
