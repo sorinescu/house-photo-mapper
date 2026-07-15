@@ -9,7 +9,10 @@ from house_photo_mapper.domain.models.project_schema import SCHEMA_VERSION
 
 
 class ExportSettings(BaseModel):
-    """Export configuration settings."""
+    """Export configuration settings for report generation.
+
+    Controls PDF report layout, margins, page format, and content inclusion.
+    """
 
     include_photos: bool = True
     include_annotations: bool = True
@@ -17,6 +20,22 @@ class ExportSettings(BaseModel):
     page_format: str = "A4"
     orientation: str = "portrait"
     dpi: int = 300
+    # Report layout
+    report_title: str = ""
+    report_subtitle: str = ""
+    report_author: str = ""
+    # Page margins in mm
+    margin_top: float = 20.0
+    margin_bottom: float = 20.0
+    margin_left: float = 20.0
+    margin_right: float = 20.0
+    # Figure numbering
+    figure_numbering: bool = True
+    figure_prefix: str = ""
+    # Photo display
+    photo_columns: int = 1
+    photo_max_width_pct: float = 100.0
+    photo_caption: bool = True
 
 
 class UIPreferences(BaseModel):
