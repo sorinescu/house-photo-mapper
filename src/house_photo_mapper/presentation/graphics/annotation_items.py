@@ -5,14 +5,13 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QVariant
-from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF, QPainterPath
+from PySide6.QtCore import Qt, Signal, QPointF, QRectF
+from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsRectItem,
     QGraphicsPolygonItem,
-    QGraphicsItem,
     QGraphicsItemGroup,
 )
 
