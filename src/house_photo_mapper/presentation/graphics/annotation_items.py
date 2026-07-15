@@ -5,12 +5,14 @@ from __future__ import annotations
 import math
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
+from PySide6.QtCore import Qt, Signal, QPointF, QRectF, QVariant
+from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF, QPainterPath
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
+    QGraphicsRectItem,
     QGraphicsPolygonItem,
+    QGraphicsItem,
     QGraphicsItemGroup,
 )
 
@@ -19,6 +21,72 @@ Z_AREA = 1
 Z_CONE = 2
 Z_ARROW = 3
 Z_MARKER = 4
+Z_GRIP = 5
+
+# Data role for storing annotation_id on graphics items
+ANNOTATION_ID_ROLE = Qt.ItemDataRole.UserRole + 1
+
+# Default annotation color
+DEFAULT_ANNOTATION_COLOR = "#DC2828"
+
+
+def hex_to_qcolor(hex_color: str, alpha: int = 255) -> QColor:
+    """Convert hex color string to QColor.
+
+    Args:
+        hex_color: Hex color string like '#DC2828' or 'DC2828'.
+        alpha: Alpha channel (0-255).
+
+    Returns:
+        QColor instance.
+    """
+    if not hex_color:
+        return QColor(DEFAULT_ANNOTATION_COLOR)
+    if not hex_color.startswith("#"):
+        hex_color = "#" + hex_color
+    c = QColor(hex_color)
+    c.setAlpha(alpha)
+    return c
+
+
+class GripItem(QGraphicsEllipseItem):
+    """Small draggable handle for resizing rectangles.
+
+    Attached to a parent VisibleAreaItem at corners and edges.
+    Dragging a grip resizes the parent rectangle.
+    """
+
+    GRIP_RADIUS = 6.0
+
+    def __init__(
+        self,
+        index: int,
+        parent_rect: VisibleAreaItem,
+        pos: QPointF,
+        parent=None,
+    ):
+        super().__init__(
+            -self.GRIP_RADIUS,
+            -self.GRIP_RADIUS,
+            self.GRIP_RADIUS * 2,
+            self.GRIP_RADIUS * 2,
+            parent,
+        )
+        self._index = index  # 0-7: 4 corners + 4 edge midpoints
+        self._parent_rect = parent_rect
+        self.setPos(pos)
+        self.setZValue(Z_GRIP)
+        self.setBrush(QBrush(QColor(255, 255, 255, 200)))
+        self.setPen(QPen(QColor(100, 100, 100), 1.0))
+        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, False)
+        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+        self.setVisible(False)  # Hidden by default, shown on selection
+
+    def itemChange(self, change, value):
+        if change == QGraphicsEllipseItem.GraphicsItemChange.ItemPositionHasChanged:
+            self._parent_rect.resize_from_grip(self._index, self.pos())
+        return super().itemChange(change, value)
 
 
 class CameraMarkerItem(QGraphicsEllipseItem):
@@ -46,6 +114,14 @@ class CameraMarkerItem(QGraphicsEllipseItem):
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable, True)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+
+    def set_color(self, hex_color: str) -> None:
+        """Update marker color."""
+        c = hex_to_qcolor(hex_color)
+        self.setBrush(QBrush(c))
+        dark = QColor(c)
+        dark.setAlpha(200)
+        self.setPen(QPen(dark, 1.5))
 
     def itemChange(self, change, value):
         if change == QGraphicsEllipseItem.GraphicsItemChange.ItemPositionHasChanged:
@@ -90,6 +166,10 @@ class DirectionArrowItem(QGraphicsLineItem):
         self._update_geometry()
         self.angleChanged.emit(angle)
 
+    def set_color(self, hex_color: str) -> None:
+        """Update arrow color."""
+        self.setPen(QPen(hex_to_qcolor(hex_color), 2.0))
+
     @property
     def angle(self) -> float:
         return self._angle
@@ -110,12 +190,8 @@ class DirectionArrowItem(QGraphicsLineItem):
         a1 = rad + math.radians(150)
         a2 = rad - math.radians(150)
 
-        p1 = end + self.ARROW_HEAD_LEN * (
-            __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(math.cos(a1), math.sin(a1))
-        )
-        p2 = end + self.ARROW_HEAD_LEN * (
-            __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(math.cos(a2), math.sin(a2))
-        )
+        p1 = end + self.ARROW_HEAD_LEN * QPointF(math.cos(a1), math.sin(a1))
+        p2 = end + self.ARROW_HEAD_LEN * QPointF(math.cos(a2), math.sin(a2))
         painter.drawLine(end, p1)
         painter.drawLine(end, p2)
 
@@ -128,7 +204,13 @@ class ViewingConeItem(QGraphicsPolygonItem):
 
     CONE_LENGTH = 80.0
 
-    def __init__(self, marker_item: CameraMarkerItem, direction_item: DirectionArrowItem, cone_angle: float = 60.0, parent=None):
+    def __init__(
+        self,
+        marker_item: CameraMarkerItem,
+        direction_item: DirectionArrowItem,
+        cone_angle: float = 60.0,
+        parent=None,
+    ):
         super().__init__(parent)
         self._marker = marker_item
         self._direction = direction_item
@@ -144,6 +226,13 @@ class ViewingConeItem(QGraphicsPolygonItem):
         """Set cone spread angle in degrees."""
         self._cone_angle = angle
 
+    def set_color(self, hex_color: str) -> None:
+        """Update cone color."""
+        c = hex_to_qcolor(hex_color, 40)
+        self.setBrush(QBrush(c))
+        border = hex_to_qcolor(hex_color, 120)
+        self.setPen(QPen(border, 1.0, Qt.PenStyle.DashLine))
+
     def update_geometry(self) -> None:
         """Rebuild cone polygon from marker position, direction, and cone angle."""
         marker_pos = self._marker.pos()
@@ -154,77 +243,155 @@ class ViewingConeItem(QGraphicsPolygonItem):
         right_dir = math.radians(direction) - half
 
         tip = marker_pos
-        left = tip + self.CONE_LENGTH * (
-            __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(
-                math.cos(math.pi - left_dir), -math.sin(math.pi - left_dir)
-            )
+        left = tip + self.CONE_LENGTH * QPointF(
+            math.cos(math.pi - left_dir), -math.sin(math.pi - left_dir)
         )
-        right = tip + self.CONE_LENGTH * (
-            __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(
-                math.cos(math.pi - right_dir), -math.sin(math.pi - right_dir)
-            )
+        right = tip + self.CONE_LENGTH * QPointF(
+            math.cos(math.pi - right_dir), -math.sin(math.pi - right_dir)
         )
 
         polygon = QPolygonF([tip, left, right])
         self.setPolygon(polygon)
 
 
-class VisibleAreaItem(QGraphicsPolygonItem):
-    """Semi-transparent polygon for user-drawn visible area.
+class VisibleAreaItem(QGraphicsRectItem):
+    """Resizable rectangle representing the visible area around a marker.
 
-    Supports vertex dragging via handle items for editing.
+    Created automatically when a marker is placed. Supports resize via
+    GripItem handles at corners and edge midpoints.
     """
 
-    def __init__(self, points: list[list[float]] | None = None, parent=None):
-        super().__init__(parent)
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        parent=None,
+    ):
+        super().__init__(x, y, width, height, parent)
         self.setZValue(Z_AREA)
 
         color = QColor(60, 120, 200, 35)
         self.setBrush(QBrush(color))
         self.setPen(QPen(QColor(60, 120, 200, 150), 1.5))
-        self.setFlag(QGraphicsPolygonItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
 
-        if points and len(points) >= 3:
-            self.set_points(points)
+        # Create 8 grip handles (4 corners + 4 edge midpoints)
+        self._grips: list[GripItem] = []
+        self._create_grips()
 
-    def set_points(self, points: list[list[float]]) -> None:
-        """Set polygon vertices from list of [x, y] pairs."""
-        polygon = QPolygonF([__import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(p[0], p[1]) for p in points])
-        self.setPolygon(polygon)
+    def _create_grips(self) -> None:
+        """Create grip handles at corners and edge midpoints."""
+        for i in range(8):
+            pos = self._grip_position(i)
+            grip = GripItem(i, self, pos, parent=self)
+            self._grips.append(grip)
 
-    def get_points(self) -> list[list[float]]:
-        """Get polygon vertices as [[x, y], ...]."""
-        poly = self.polygon()
-        return [[poly.at(i).x(), poly.at(i).y()] for i in range(poly.size())]
+    def _grip_position(self, index: int) -> QPointF:
+        """Calculate position for grip at given index.
 
-    def add_vertex(self, x: float, y: float) -> None:
-        """Append a new vertex to the polygon."""
-        poly = self.polygon()
-        poly.append(__import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(x, y))
-        self.setPolygon(poly)
+        Index mapping:
+        0=top-left, 1=top-center, 2=top-right,
+        3=middle-right, 4=bottom-right, 5=bottom-center,
+        6=bottom-left, 7=middle-left
+        """
+        r = self.rect()
+        positions = [
+            QPointF(r.left(), r.top()),           # 0: top-left
+            QPointF(r.center().x(), r.top()),      # 1: top-center
+            QPointF(r.right(), r.top()),           # 2: top-right
+            QPointF(r.right(), r.center().y()),    # 3: middle-right
+            QPointF(r.right(), r.bottom()),        # 4: bottom-right
+            QPointF(r.center().x(), r.bottom()),   # 5: bottom-center
+            QPointF(r.left(), r.bottom()),         # 6: bottom-left
+            QPointF(r.left(), r.center().y()),     # 7: middle-left
+        ]
+        return positions[index]
 
-    def move_vertex(self, index: int, x: float, y: float) -> None:
-        """Move vertex at index to new position."""
-        poly = self.polygon()
-        if 0 <= index < poly.size():
-            poly.replace(index, __import__("PySide6.QtCore", fromlist=["QPointF"]).QPointF(x, y))
-            self.setPolygon(poly)
+    def _update_grip_positions(self) -> None:
+        """Move all grips to match current rect."""
+        for i, grip in enumerate(self._grips):
+            grip.setPos(self._grip_position(i))
+
+    def resize_from_grip(self, grip_index: int, new_pos: QPointF) -> None:
+        """Resize rectangle based on grip drag.
+
+        Args:
+            grip_index: Which grip was dragged (0-7).
+            new_pos: New position of the dragged grip in parent coords.
+        """
+        r = self.rect()
+        left, top, right, bottom = r.left(), r.top(), r.right(), r.bottom()
+
+        # Update the appropriate edges based on grip index
+        if grip_index in (0, 6, 7):  # left side
+            left = min(new_pos.x(), right - 20)
+        if grip_index in (2, 3, 4):  # right side
+            right = max(new_pos.x(), left + 20)
+        if grip_index in (0, 1, 2):  # top side
+            top = min(new_pos.y(), bottom - 20)
+        if grip_index in (4, 5, 6):  # bottom side
+            bottom = max(new_pos.y(), top + 20)
+
+        new_rect = QRectF(left, top, right - left, bottom - top)
+        self.setRect(new_rect)
+        self._update_grip_positions()
+
+    def set_color(self, hex_color: str) -> None:
+        """Update rectangle color."""
+        c = hex_to_qcolor(hex_color, 35)
+        self.setBrush(QBrush(c))
+        border = hex_to_qcolor(hex_color, 150)
+        self.setPen(QPen(border, 1.5))
+
+    def get_rect_data(self) -> list[float]:
+        """Get rectangle as [x, y, width, height]."""
+        r = self.rect()
+        return [r.x(), r.y(), r.width(), r.height()]
+
+    def set_rect_data(self, data: list[float]) -> None:
+        """Set rectangle from [x, y, width, height]."""
+        if len(data) >= 4:
+            self.setRect(QRectF(data[0], data[1], data[2], data[3]))
+            self._update_grip_positions()
+
+    def show_grips(self, visible: bool = True) -> None:
+        """Show or hide grip handles."""
+        for grip in self._grips:
+            grip.setVisible(visible)
+
+    def itemChange(self, change, value):
+        if change == QGraphicsRectItem.GraphicsItemChange.ItemPositionHasChanged:
+            self._update_grip_positions()
+        return super().itemChange(change, value)
 
 
 class AnnotationGraphicsGroup(QGraphicsItemGroup):
     """Groups all annotation items into a single selection/drag unit.
 
-    Z-ordering: area(1) < cone(2) < arrow(3) < marker(4).
+    Stores annotation_id for linkage to the data model.
+    Z-ordering: area(1) < cone(2) < arrow(3) < marker(4) < grips(5).
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, annotation_id: str = "", parent=None):
         super().__init__(parent)
         self.setFlag(QGraphicsItemGroup.GraphicsItemFlag.ItemIsSelectable, True)
+        self._annotation_id = annotation_id
 
         self._marker: Optional[CameraMarkerItem] = None
         self._arrow: Optional[DirectionArrowItem] = None
         self._cone: Optional[ViewingConeItem] = None
         self._area: Optional[VisibleAreaItem] = None
+
+    @property
+    def annotation_id(self) -> str:
+        return self._annotation_id
+
+    @annotation_id.setter
+    def annotation_id(self, value: str) -> None:
+        self._annotation_id = value
 
     def set_items(
         self,
@@ -244,6 +411,21 @@ class AnnotationGraphicsGroup(QGraphicsItemGroup):
         self.addToGroup(cone)
         if area is not None:
             self.addToGroup(area)
+
+    def set_color(self, hex_color: str) -> None:
+        """Apply color to all items in the group."""
+        if self._marker:
+            self._marker.set_color(hex_color)
+        if self._arrow:
+            self._arrow.set_color(hex_color)
+        if self._cone:
+            self._cone.set_color(hex_color)
+        # Area keeps its own blue color; only marker/cone/arrow get annotation color
+
+    def show_area_grips(self, visible: bool = True) -> None:
+        """Show or hide resize grips on the area rectangle."""
+        if self._area:
+            self._area.show_grips(visible)
 
     @property
     def marker(self) -> CameraMarkerItem | None:

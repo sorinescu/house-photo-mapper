@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class AnnotationModel(BaseModel):
     """Annotation linking a camera position to a plan page.
 
-    Stores position, direction, viewing cone, and visible area polygon
+    Stores position, direction, viewing cone, visible area, and color
     for a single camera annotation on a floor plan page.
     """
 
@@ -33,6 +33,10 @@ class AnnotationModel(BaseModel):
     title: str = Field(default="", description="Annotation title (required before save)")
     description: str = Field(default="", description="Free-text description")
     tags: list[str] = Field(default_factory=list, description="Tags for filtering")
+    color: str = Field(
+        default="#DC2828",
+        description="Hex color string for annotation items (marker, cone, arrow)",
+    )
 
     def to_project_json(self) -> dict:
         """Serialize to JSON-compatible dict for project persistence."""

@@ -16,7 +16,6 @@ class ToolState(Enum):
 
     SELECT = auto()
     PLACE_MARKER = auto()
-    DRAW_POLYGON = auto()
     SET_DIRECTION = auto()
     SET_CONE = auto()
 
@@ -78,7 +77,7 @@ class AnnotationViewModel(QtSafeViewModel):
         """Set active tool by name.
 
         Args:
-            tool_name: One of 'select', 'place_marker', 'draw_polygon'.
+            tool_name: One of 'select', 'place_marker', 'set_cone'.
         """
         try:
             state = ToolState[tool_name.upper()]
@@ -156,7 +155,6 @@ class AnnotationViewModel(QtSafeViewModel):
             return
         self._pending_annotation.cone_angle = angle
         self._creation_step = 4
-        self.tool_changed.emit("draw_polygon")
 
     @Slot(list)
     def set_visible_area(self, points: list[list[float]]) -> None:
@@ -289,6 +287,19 @@ class AnnotationViewModel(QtSafeViewModel):
         annotation.title = title.strip()
         annotation.description = description.strip()
         annotation.tags = [t.strip() for t in tags_csv.split(",") if t.strip()]
+
+    @Slot(str, str)
+    def update_annotation_color(self, annotation_id: str, color: str) -> None:
+        """Update color for an existing annotation.
+
+        Args:
+            annotation_id: ID of annotation to update.
+            color: New hex color string (e.g. '#FF0000').
+        """
+        if annotation_id not in self._annotations:
+            self.error_occurred.emit(f"Unknown annotation: {annotation_id}")
+            return
+        self._annotations[annotation_id].color = color
 
     def get_annotation(self, annotation_id: str) -> Optional[AnnotationModel]:
         """Get annotation by ID."""
