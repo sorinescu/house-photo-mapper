@@ -430,9 +430,9 @@ class MainWindow(QMainWindow):
         self._place_marker_action.triggered.connect(lambda: self._annotation_vm.set_tool("place_marker"))
         menu.addAction(self._place_marker_action)
 
-        self._draw_polygon_action = QAction("Draw &Polygon", self)
-        self._draw_polygon_action.setStatusTip("Draw a visible area polygon")
-        self._draw_polygon_action.triggered.connect(lambda: self._annotation_vm.set_tool("draw_polygon"))
+        self._draw_polygon_action = QAction("Set &Cone", self)
+        self._draw_polygon_action.setStatusTip("Adjust viewing cone direction")
+        self._draw_polygon_action.triggered.connect(lambda: self._annotation_vm.set_tool("set_cone"))
         menu.addAction(self._draw_polygon_action)
 
         menu.addSeparator()
@@ -548,6 +548,7 @@ class MainWindow(QMainWindow):
         self._annotation_vm.annotation_added.connect(self._on_annotation_added)
         self._annotation_vm.annotation_removed.connect(self._on_annotation_removed)
         self._annotation_panel.save_requested.connect(self._annotation_vm.update_annotation_metadata)
+        self._annotation_panel.color_changed.connect(self._on_annotation_color_changed)
 
         # Connect photo browser ↔ annotation sync
         self._annotation_vm.annotation_selected.connect(self._highlight_photo_for_annotation)
@@ -855,7 +856,7 @@ class MainWindow(QMainWindow):
         ann = self._annotation_vm.get_annotation(annotation_id)
         if ann:
             self._annotation_panel.show_annotation(
-                ann.annotation_id, ann.title, ann.description, ann.tags
+                ann.annotation_id, ann.title, ann.description, ann.tags, ann.color
             )
             self._delete_action.setEnabled(True)
 
@@ -887,6 +888,17 @@ class MainWindow(QMainWindow):
                 break
         self._annotation_panel.clear()
         self._delete_action.setEnabled(False)
+
+    @Slot(str, str)
+    def _on_annotation_color_changed(self, annotation_id: str, color: str) -> None:
+        """Handle annotation color change - update data model and graphics."""
+        self._annotation_vm.update_annotation_color(annotation_id, color)
+        # Update the graphics group color
+        plan_view = self._plan_view
+        if hasattr(plan_view, '_view') and hasattr(plan_view._view, '_annotation_groups'):
+            group = plan_view._view._annotation_groups.get(annotation_id)
+            if group:
+                group.set_color(color)
 
     @Slot(str)
     def _highlight_photo_for_annotation(self, annotation_id: str) -> None:
