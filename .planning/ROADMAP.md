@@ -148,13 +148,13 @@ Plans:
   6. Plan viewport zoom/pan/rotate responds in <100ms at 50 photos / 20 plan pages
   7. Smooth zoom/pan at standard project sizes (no jank, 60fps)
 
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
 
 - [ ] 05-01: PersistenceService — atomic JSON writes, .bak files, schema versioning, streaming for large arrays
 - [ ] 05-02: Auto-save — QTimer 2-minute interval, background serialization, dirty flag tracking
-- [ ] 05-03: Crash recovery — startup scan for .bak/auto-save, recovery dialog, data integrity verification
+- [x] 05-03: Crash recovery — startup scan for .bak/auto-save, recovery dialog, data integrity verification
 - [ ] 05-04: Theme system — QPalette-based dark/light, stylesheet variables, OS preference detection, persistence
 - [ ] 05-05: Performance baseline — LRU image cache tuning, QGraphicsScene item recycling, benchmark harness
 
@@ -217,7 +217,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. Plan System | 8/8 | Complete | 2026-07-14 |
 | 3. Photo System | 7/7 | Complete | 2026-07-14 |
 | 4. Annotation Tools | 6/6 | Complete | 2026-07-14 |
-| 5. Project Persistence & Performance | 0/TBD | Not started | - |
+| 5. Project Persistence & Performance | 1/5 | In Progress | - |
 | 6. Report Generation | 0/TBD | Not started | - |
 | 7. Polish, Packaging & Ship | 0/TBD | Not started | - |
 
