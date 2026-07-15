@@ -16,8 +16,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation & Core Architecture** - Project scaffolding, MVVM skeleton, coordinate system, macOS app bundle (completed 2026-07-13)
 - [x] **Phase 2: Plan System** - PDF/PNG/JPG import, multi-page navigation, zoom/pan/rotate, tile pyramid rendering (completed 2026-07-14)
 - [x] **Phase 3: Photo System** - Drag-drop/folder import, EXIF extraction, duplicate detection, lazy-loaded thumbnails (completed 2026-07-14)
-- [ ] **Phase 4: Annotation Tools** - Camera marker, direction arrow, viewing cone, visible polygon, metadata, undo/redo, shortcuts
-- [ ] **Phase 5: Project Persistence & Performance** - JSON serialization, auto-save, crash recovery, dark/light mode, <100ms viewport
+- [x] **Phase 4: Annotation Tools** - Camera marker, direction arrow, viewing cone, visible polygon, metadata, undo/redo, shortcuts (completed 2026-07-15)
+- [x] **Phase 5: Project Persistence & Performance** - JSON serialization, auto-save, crash recovery, dark/light mode, <100ms viewport
 - [ ] **Phase 6: Report Generation** - Professional PDF reports with photo, plan snippet, camera symbol, cone, metadata, figure numbers
 - [ ] **Phase 7: Polish, Packaging & Ship** - macOS notarized DMG, CI/CD, user guide, API docs, v1.0 release
 
@@ -115,16 +115,25 @@ Plans:
 **Requirements**: AN-01, AN-02, AN-03, AN-04, AN-05, AN-06, AN-07, AN-08, ED-01, ED-02, ED-03, ED-04, NA-01, NA-02, NA-03, NA-04, NA-05, NA-06, NA-07, NA-08, US-01, US-02
 **Success Criteria** (what must be TRUE):
 
-  1. User clicks on plan → camera marker placed; drags from marker → direction arrow appears; adjusts cone angle
-  2. User draws visible-area polygon with 4+ points, can snap to plan geometry endpoints
-  3. User enters title, description, tags, and selects floor for each annotation
-  4. User moves marker, rotates arrow, resizes cone, deletes annotation — all with unlimited undo/redo (Ctrl+Z/Ctrl+Y)
-  5. Arrow keys navigate previous/next photo; Space confirms annotation; Delete removes selection; Ctrl+S saves
-  6. User completes a full annotation (marker + direction + cone + polygon + metadata) in ≤3 clicks
+  1. User clicks on plan → camera marker, viewing cone, and default rectangle appear automatically (all same color)
+  2. User can move marker independently, resize rectangle independently, rotate cone around marker
+  3. Marker and cone always stay inside rectangle during resize/move operations
+  4. User enters title, description, tags, and selects floor for each annotation
+  5. User moves marker, rotates cone, resizes rectangle, deletes annotation — all with unlimited undo/redo (Ctrl+Z/Ctrl+Y)
+  6. Clicking any annotation element opens annotation properties panel
+  7. User can select color for annotation via color picker in properties panel
+  8. Arrow keys navigate previous/next photo; Space confirms annotation; Delete removes selection; Ctrl+S saves
 
-**Plans**: 6 plans
+**Plans**: 7/6 plans complete
 
 Plans:
+
+- [x] 04-01-PLAN.md
+- [x] 04-02-PLAN.md
+- [x] 04-03-PLAN.md
+- [x] 04-04-PLAN.md
+- [x] 04-05-PLAN.md
+- [x] 04-07-PLAN.md
 
 - [x] 04-01: Annotation graphics items — CameraMarker, DirectionArrow, ViewingCone, VisibleAreaPolygon (QGraphicsItem)
 - [x] 04-02: AnnotationVM — creation flow, floor selection, metadata form (title, description, tags)
@@ -132,6 +141,7 @@ Plans:
 - [x] 04-04: Keyboard shortcuts — QShortcut with context, configurable keymap, QAction for menu items
 - [x] 04-05: Photo-annotation binding — arrow keys nav, Space to place, selection sync between photo browser and plan
 - [x] 04-06: Annotation UI integration — menu, toolbar, properties panel, plan view mouse events, photo sync (gap closure)
+- [x] 04-07: Annotation grouping & interactive tools — marker, cone, rectangle grouping, per-annotation colors, interactive cone rotation
 
 ### Phase 5: Project Persistence & Performance
 
@@ -156,7 +166,7 @@ Plans:
 - [x] 05-02: Auto-save — QTimer 2-minute interval, background serialization, dirty flag tracking
 - [x] 05-03: Crash recovery — startup scan for .bak/auto-save, recovery dialog, data integrity verification
 - [x] 05-04: Theme system — QPalette-based dark/light, stylesheet variables, OS preference detection, persistence
-- [ ] 05-05: Performance baseline — LRU image cache tuning, QGraphicsScene item recycling, benchmark harness
+- [x] 05-05: Performance baseline — LRU image cache tuning, QGraphicsScene item recycling, benchmark harness
 
 ### Phase 6: Report Generation
 
@@ -216,8 +226,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Core Architecture | 5/5 | Complete    | 2026-07-13 |
 | 2. Plan System | 8/8 | Complete | 2026-07-14 |
 | 3. Photo System | 7/7 | Complete | 2026-07-14 |
-| 4. Annotation Tools | 6/6 | Complete | 2026-07-14 |
-| 5. Project Persistence & Performance | 1/5 | In Progress | - |
+| 4. Annotation Tools | 7/6 | Complete   | 2026-07-15 |
+| 5. Project Persistence & Performance | 5/5 | Complete | 2026-07-15 |
 | 6. Report Generation | 0/TBD | Not started | - |
 | 7. Polish, Packaging & Ship | 0/TBD | Not started | - |
 
@@ -241,7 +251,7 @@ Phase 1 → Phase 2 → Phase 4 → Phase 5 → Phase 6 → Phase 7
 | PM-02 | Phase 1 | Pending |
 | PM-03 | Phase 1 | Pending |
 | PM-04 | Phase 1 | Pending |
-| PM-05 | Phase 5 | Pending |
+| PM-05 | Phase 5 | Complete |
 | PI-01 | Phase 2 | Pending |
 | PI-02 | Phase 2 | Pending |
 | PI-03 | Phase 2 | Pending |
@@ -283,17 +293,17 @@ Phase 1 → Phase 2 → Phase 4 → Phase 5 → Phase 6 → Phase 7
 | RG-06 | Phase 6 | Pending |
 | RG-07 | Phase 6 | Pending |
 | RG-08 | Phase 6 | Pending |
-| PP-01 | Phase 5 | Pending |
-| PP-02 | Phase 5 | Pending |
-| PP-03 | Phase 5 | Pending |
-| PF-01 | Phase 5 | Pending |
-| PF-02 | Phase 5 | Pending |
-| RL-01 | Phase 5 | Pending |
-| RL-02 | Phase 5 | Pending |
+| PP-01 | Phase 5 | Complete |
+| PP-02 | Phase 5 | Complete |
+| PP-03 | Phase 5 | Complete |
+| PF-01 | Phase 5 | Complete |
+| PF-02 | Phase 5 | Complete |
+| RL-01 | Phase 5 | Complete |
+| RL-02 | Phase 5 | Complete |
 | US-01 | Phase 4 | Pending |
 | US-02 | Phase 4 | Pending |
-| US-03 | Phase 5 | Pending |
-| US-04 | Phase 5 | Pending |
+| US-03 | Phase 5 | Complete |
+| US-04 | Phase 5 | Complete |
 | CP-01 | Phase 1 | Pending |
 
 **Coverage:**
