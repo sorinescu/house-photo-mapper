@@ -1052,7 +1052,7 @@ class MainWindow(QMainWindow):
 
         # Create ViewModel and progress dialog
         project_dir = str(
-            Path(self._vm.project.project.path).parent
+            Path(self._vm.project.path).parent
         ) if self._vm.project and self._vm.project.path else "."
         self._report_vm = ReportViewModel(parent=self)
         self._report_progress_dialog = ReportProgressDialog(
