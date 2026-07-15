@@ -505,7 +505,14 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("HousePhotoMapper")
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Save window state on close."""
+        """Save project if dirty, then save window state and exit."""
+        # Auto-save if project has unsaved changes
+        if self._vm.project_vm and self._vm.project_vm.dirty:
+            self._status_bar.showMessage("Saving project...")
+            self._vm.save_project()
+            self._status_bar.showMessage("Project saved.", 2000)
+
+        # Save window geometry and state
         self._persistence.save_window_geometry(bytes(self.saveGeometry().data()))
         self._persistence.save_window_state(bytes(self.saveState().data()))
         super().closeEvent(event)
@@ -680,7 +687,9 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""
         if event.key() == Qt.Key.Key_S and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self._status_bar.showMessage("Saving...")
             self._vm.save_project()
+            self._status_bar.showMessage("Saved.", 2000)
             event.accept()
         elif event.key() == Qt.Key.Key_S and event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
             self._vm.save_project_as()
