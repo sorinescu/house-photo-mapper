@@ -94,8 +94,15 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("HousePhotoMapper")
         self.resize(1200, 800)
 
-        # Auto-save manager
-        self._autosave = AutoSaveManager(self._vm.project_vm, parent=self)
+        # Auto-save manager - load settings from persistence
+        auto_save_enabled = self._persistence.get_auto_save_enabled()
+        auto_save_interval_ms = self._persistence.get_auto_save_interval() * 1000
+        self._autosave = AutoSaveManager(
+            self._vm.project_vm,
+            interval_ms=auto_save_interval_ms,
+            parent=self,
+        )
+        self._autosave.enabled = auto_save_enabled
         self._autosave.save_started.connect(self._on_autosave_started)
         self._autosave.save_completed.connect(self._on_autosave_completed)
 

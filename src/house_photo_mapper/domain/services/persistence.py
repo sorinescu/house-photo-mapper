@@ -288,3 +288,29 @@ class PersistenceService:
         """Load main window state."""
         value: Any = self._settings.value("mainWindow/state", type=bytes)
         return bytes(value) if value else None
+
+    def get_auto_save_enabled(self) -> bool:
+        """Get whether auto-save is enabled (default: True)."""
+        value: Any = self._settings.value("autoSave/enabled", True, type=bool)
+        return bool(value)
+
+    def set_auto_save_enabled(self, enabled: bool) -> None:
+        """Set whether auto-save is enabled.
+
+        Args:
+            enabled: True to enable auto-save, False to disable.
+        """
+        self._settings.setValue("autoSave/enabled", enabled)
+
+    def get_auto_save_interval(self) -> int:
+        """Get auto-save interval in seconds (default: 120 = 2 minutes)."""
+        value: Any = self._settings.value("autoSave/intervalSeconds", 120, type=int)
+        return int(value) if value else 120
+
+    def set_auto_save_interval(self, seconds: int) -> None:
+        """Set auto-save interval in seconds.
+
+        Args:
+            seconds: Interval in seconds (minimum 5).
+        """
+        self._settings.setValue("autoSave/intervalSeconds", max(5, seconds))
