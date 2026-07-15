@@ -69,9 +69,10 @@ class ThumbnailGenerator(QObject):
 
     Features:
     - Background generation via QThreadPool
-    - LRU memory cache (default 100MB)
+    - LRU memory cache (default 500MB)
     - Disk cache in .cache/thumbnails/
     - Cache invalidation based on source file mtime
+    - Hit/miss statistics for performance monitoring
     """
 
     thumbnail_ready = Signal(str, QPixmap)
@@ -80,14 +81,14 @@ class ThumbnailGenerator(QObject):
     def __init__(
         self,
         cache_dir: Path | None = None,
-        max_cache_bytes: int = 100_000_000,
+        max_cache_bytes: int = 500_000_000,
         parent: QObject | None = None,
     ) -> None:
         """Initialize thumbnail generator.
 
         Args:
             cache_dir: Directory for disk cache. None = no disk cache.
-            max_cache_bytes: Maximum memory cache size in bytes.
+            max_cache_bytes: Maximum memory cache size in bytes (default 500MB).
             parent: Parent QObject.
         """
         super().__init__(parent)
@@ -97,6 +98,11 @@ class ThumbnailGenerator(QObject):
         self._current_cache_bytes = 0
         self._disk_cache_dir = cache_dir
         self._pending: set[str] = set()
+
+        # Cache statistics
+        self._hits = 0
+        self._misses = 0
+        self._disk_hits = 0
 
         if self._disk_cache_dir:
             self._disk_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -123,6 +129,7 @@ class ThumbnailGenerator(QObject):
             # Move to end (most recently used)
             self._cache_order.remove(path)
             self._cache_order.append(path)
+            self._hits += 1
             return self._cache[path]
 
         # Check disk cache
@@ -130,8 +137,10 @@ class ThumbnailGenerator(QObject):
             pixmap = self._load_from_disk(path)
             if pixmap:
                 self._add_to_cache(path, pixmap)
+                self._disk_hits += 1
                 return pixmap
 
+        self._misses += 1
         return None
 
     def generate(
@@ -257,3 +266,27 @@ class ThumbnailGenerator(QObject):
         self._cache_order.clear()
         self._current_cache_bytes = 0
         self._pending.clear()
+
+    @property
+    def cache_stats(self) -> dict[str, int]:
+        """Get cache hit/miss statistics.
+
+        Returns:
+            Dict with hits, misses, disk_hits, and total_entries.
+        """
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "disk_hits": self._disk_hits,
+            "total_lookups": self._hits + self._misses,
+            "memory_entries": len(self._cache),
+            "pending_entries": len(self._pending),
+            "current_bytes": self._current_cache_bytes,
+            "max_bytes": self._max_cache_bytes,
+        }
+
+    def reset_stats(self) -> None:
+        """Reset cache statistics counters."""
+        self._hits = 0
+        self._misses = 0
+        self._disk_hits = 0
