@@ -160,6 +160,80 @@ class PersistenceService:
         project.mark_clean()
         return project
 
+    def recover_project(self, bak_path: str) -> ProjectModel:
+        """Recover a project from a .bak backup file with validation and logging.
+
+        Validates the recovered data, logs recovery operations, and returns
+        a clean ProjectModel ready to be saved to a new location.
+
+        Args:
+            bak_path: Path to the .hpmpj.bak backup file.
+
+        Returns:
+            Validated ProjectModel instance with path set to original location.
+
+        Raises:
+            FileNotFoundError: If backup file doesn't exist.
+            ValueError: If recovered data fails schema validation.
+        """
+        logger.info("Starting recovery from .bak: %s", bak_path)
+
+        try:
+            project = self.load_project_from_backup(bak_path)
+        except Exception as e:
+            logger.error("Recovery failed for %s: %s", bak_path, e)
+            raise
+
+        # Log recovery details
+        photo_count = len(project.photos)
+        annotation_count = len(project.annotations)
+        plan_count = len(project.plans)
+        logger.info(
+            "Recovery successful: %d photos, %d annotations, %d plans",
+            photo_count,
+            annotation_count,
+            plan_count,
+        )
+
+        # Validate annotation references
+        warnings = self._validate_recovered_data(project)
+        if warnings:
+            for warning in warnings:
+                logger.warning("Recovery validation warning: %s", warning)
+
+        return project
+
+    def _validate_recovered_data(self, project: ProjectModel) -> list[str]:
+        """Validate recovered project data and return warnings.
+
+        Args:
+            project: ProjectModel to validate.
+
+        Returns:
+            List of warning messages for data inconsistencies.
+        """
+        warnings: list[str] = []
+
+        # Check JSON structure - basic field presence
+        if not hasattr(project, "schema_version"):
+            warnings.append("Missing schema_version field")
+
+        # Validate annotation references
+        photo_paths = {p.get("path", "") for p in project.photos}
+        for i, annotation in enumerate(project.annotations):
+            photo_path = annotation.get("photo_path", "")
+            if photo_path and photo_path not in photo_paths:
+                warnings.append(
+                    f"Annotation {i} references missing photo: {photo_path}"
+                )
+
+        # Check for required fields in photos
+        for i, photo in enumerate(project.photos):
+            if not photo.get("path"):
+                warnings.append(f"Photo {i} missing path field")
+
+        return warnings
+
     def save_project_as(self, project: ProjectModel, new_path: str) -> None:
         """Save project to a new path and update project's path.
 
