@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from house_photo_mapper.domain.models.project_schema import SCHEMA_VERSION
+
 
 class ExportSettings(BaseModel):
     """Export configuration settings."""
@@ -32,7 +34,7 @@ class ProjectModel(BaseModel):
     """Project data model with JSON serialization.
 
     Represents a complete HousePhotoMapper project including plans, photos,
-    annotations, export settings, and UI preferences.
+    annotations, export settings, and UI state.
     """
 
     model_config = ConfigDict(
@@ -41,12 +43,21 @@ class ProjectModel(BaseModel):
         json_encoders={Path: str},
     )
 
+    schema_version: int = Field(
+        default=SCHEMA_VERSION,
+        ge=1,
+        description="Schema version for forward/backward compatibility",
+    )
     path: str = ""
     plans: list[dict[str, Any]] = Field(default_factory=list)
     photos: list[dict[str, Any]] = Field(default_factory=list)
     annotations: list[dict[str, Any]] = Field(default_factory=list)
     export_settings: ExportSettings = Field(default_factory=ExportSettings)
     ui_preferences: UIPreferences = Field(default_factory=UIPreferences)
+    ui_state: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runtime UI state: window layout, panel sizes, last active views",
+    )
     _dirty: bool = PrivateAttr(default=False)
 
     @classmethod
