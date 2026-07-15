@@ -3,10 +3,11 @@
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeyEvent, QKeySequence
+from PySide6.QtCore import Qt, QUrl, Slot
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -24,11 +25,15 @@ from house_photo_mapper.infrastructure.logging import get_logger
 from house_photo_mapper.infrastructure.platform import get_app_data_dir
 from house_photo_mapper.infrastructure.recovery import RecoveryScanner
 from house_photo_mapper.infrastructure.theme import ThemeManager, ThemeMode
+from house_photo_mapper.domain.services.report_generator import ReportGeneratorService, ReportPageData
+from house_photo_mapper.presentation.views.layout_dialog import LayoutDialog
 from house_photo_mapper.presentation.views.recovery_dialog import RecoveryDialog
+from house_photo_mapper.presentation.views.report_progress import ReportProgressDialog
 from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
 from house_photo_mapper.presentation.viewmodels.photo_vm import PhotoViewModel
 from house_photo_mapper.presentation.viewmodels.plan_vm import PlanViewModel
+from house_photo_mapper.presentation.viewmodels.report_vm import ReportViewModel
 from house_photo_mapper.presentation.views.annotation_properties_panel import (
     AnnotationPropertiesPanel,
 )
@@ -167,7 +172,17 @@ class MainWindow(QMainWindow):
             # Show recovery dialog
             dialog = RecoveryDialog(recoverable, parent=self)
             dialog.recovery_selected.connect(self._on_recovery_selected)
-            dialog.exec()
+            result = dialog.exec()
+
+            # If user dismissed, delete the .bak files so they don't reappear
+            from PySide6.QtWidgets import QDialog
+            if result == QDialog.DialogCode.Rejected:
+                for project in recoverable:
+                    try:
+                        project.bak_path.unlink(missing_ok=True)
+                        logger.info("Deleted dismissed .bak: %s", project.bak_path)
+                    except OSError as e:
+                        logger.warning("Failed to delete .bak %s: %s", project.bak_path, e)
 
         except Exception as e:
             logger.warning("Recovery scan failed: %s", e)
@@ -300,6 +315,14 @@ class MainWindow(QMainWindow):
         export_annotations_action.setStatusTip("Export annotations as JSON")
         export_annotations_action.triggered.connect(self._vm.export_annotations)
         menu.addAction(export_annotations_action)
+
+        # Generate Report
+        self._generate_report_action = QAction("Generate &Report...", self)
+        self._generate_report_action.setShortcut(QKeySequence("Ctrl+Shift+R"))
+        self._generate_report_action.setStatusTip("Generate a professional PDF report")
+        self._generate_report_action.triggered.connect(self._generate_report)
+        self._generate_report_action.setEnabled(False)
+        menu.addAction(self._generate_report_action)
 
         menu.addSeparator()
 
@@ -447,6 +470,7 @@ class MainWindow(QMainWindow):
     def _create_toolbar(self) -> None:
         """Create the main toolbar."""
         self._toolbar = QToolBar("Main Toolbar", self)
+        self._toolbar.setObjectName("MainToolbar")
         self._toolbar.setMovable(False)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._toolbar)
 
@@ -470,6 +494,11 @@ class MainWindow(QMainWindow):
         self._tb_import_photos = QAction("Import Photos", self)
         self._tb_import_photos.triggered.connect(self._vm.import_photo_files)
         self._toolbar.addAction(self._tb_import_photos)
+
+        self._tb_generate_report = QAction("Generate Report", self)
+        self._tb_generate_report.triggered.connect(self._generate_report)
+        self._tb_generate_report.setEnabled(False)
+        self._toolbar.addAction(self._tb_generate_report)
 
         # Annotation toolbar
         self._annotation_toolbar = AnnotationToolbar(self)
@@ -577,6 +606,8 @@ class MainWindow(QMainWindow):
         self._save_as_action.setEnabled(has_project)
         self._close_action.setEnabled(has_project)
         self._tb_save.setEnabled(has_project)
+        self._generate_report_action.setEnabled(has_project)
+        self._tb_generate_report.setEnabled(has_project)
         
         # Load theme from project settings
         if has_project:
@@ -925,6 +956,138 @@ class MainWindow(QMainWindow):
                 annotation_id=aid,
             )
             self._undo_stack.push(cmd)
+
+    @Slot()
+    def _generate_report(self) -> None:
+        """Generate a PDF report from annotations and photos."""
+        annotations = self._annotation_vm.get_all_annotations()
+        if not annotations:
+            self._status_bar.showMessage("No annotations to report")
+            return
+
+        # Show LayoutDialog to get page format
+        dialog = LayoutDialog(parent=self)
+        if dialog.exec() != LayoutDialog.DialogCode.Accepted:
+            return
+
+        format_str, orientation_str = dialog.get_selected_layout()
+        page_size = dialog.get_page_size_string()
+
+        # Build pages_data from annotations
+        pages_data = []
+        plan_vm = self._plan_vm
+        photo_vm = self._photo_vm
+
+        for ann in annotations:
+            # Find linked photo
+            photo = None
+            for p in photo_vm.photos:
+                if p.path == ann.photo_path:
+                    photo = p
+                    break
+
+            # Find plan page for calibration
+            plan_page = None
+            if plan_vm.plan_model:
+                sorted_pages = plan_vm.plan_model.get_sorted_pages()
+                if 0 <= ann.page_index < len(sorted_pages):
+                    plan_page = sorted_pages[ann.page_index]
+
+            # Get calibration
+            pixels_per_meter = 100.0  # default
+            plan_pdf_path = ""
+            plan_page_index = 0
+            if plan_page and plan_page.calibration:
+                pixels_per_meter = plan_page.calibration.pixels_per_meter
+                plan_pdf_path = plan_page.source_path
+                plan_page_index = plan_page.page_index
+
+            # Build metadata from photo EXIF
+            metadata = {}
+            if photo and photo.exif:
+                if photo.exif.camera_make:
+                    metadata["camera_make"] = photo.exif.camera_make
+                if photo.exif.camera_model:
+                    metadata["camera_model"] = photo.exif.camera_model
+                if photo.exif.lens_model:
+                    metadata["lens_model"] = photo.exif.lens_model
+                if photo.exif.timestamp:
+                    metadata["timestamp"] = photo.exif.timestamp.strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+
+            # Get photo path
+            photo_path = ann.photo_path
+            if photo and photo.original_path:
+                photo_path = photo.original_path
+
+            pages_data.append(
+                ReportPageData(
+                    annotation_id=ann.annotation_id,
+                    photo_path=photo_path,
+                    plan_pdf_path=plan_pdf_path,
+                    plan_page_index=plan_page_index,
+                    plan_center_x=ann.position_x,
+                    plan_center_y=ann.position_y,
+                    plan_pixels_per_meter=pixels_per_meter,
+                    direction_angle=ann.direction_angle,
+                    cone_angle=ann.cone_angle,
+                    color=ann.color,
+                    title=ann.title or "Untitled",
+                    description=ann.description,
+                    metadata=metadata,
+                    floor=ann.floor,
+                )
+            )
+
+        # Get output path
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Report",
+            "",
+            "Report PDF (*.pdf)",
+        )
+        if not output_path:
+            return
+
+        # Create ViewModel and progress dialog
+        project_dir = str(
+            Path(self._vm.project.project.path).parent
+        ) if self._vm.project and self._vm.project.path else "."
+        self._report_vm = ReportViewModel(parent=self)
+        self._report_progress_dialog = ReportProgressDialog(
+            total_pages=len(pages_data), parent=self
+        )
+
+        # Connect signals
+        self._report_vm.progress.connect(self._report_progress_dialog.update_progress)
+        self._report_vm.finished.connect(self._on_report_finished)
+        self._report_vm.error.connect(self._on_report_error)
+
+        # Start generation
+        self._report_vm.generate_report(
+            pages_data=pages_data,
+            output_path=output_path,
+            page_size=page_size,
+            project_dir=project_dir,
+        )
+        self._report_progress_dialog.show()
+
+    @Slot(str)
+    def _on_report_finished(self, path: str) -> None:
+        """Handle report generation completion."""
+        if hasattr(self, "_report_progress_dialog"):
+            self._report_progress_dialog.finish()
+        self._status_bar.showMessage(f"Report generated: {path}")
+        # Open PDF in default viewer
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    @Slot(str)
+    def _on_report_error(self, message: str) -> None:
+        """Handle report generation error."""
+        if hasattr(self, "_report_progress_dialog"):
+            self._report_progress_dialog.finish()
+        self._status_bar.showMessage(f"Report generation failed: {message}")
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """Handle key press events for shortcuts."""
