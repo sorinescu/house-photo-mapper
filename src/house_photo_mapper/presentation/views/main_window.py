@@ -576,6 +576,10 @@ class MainWindow(QMainWindow):
         self._save_as_action.setEnabled(has_project)
         self._close_action.setEnabled(has_project)
         self._tb_save.setEnabled(has_project)
+        
+        # Load theme from project settings
+        if has_project:
+            self._load_theme_from_project(project_vm)
 
     @Slot(object)
     def _on_project_changed_autosave(self, project_vm: "ProjectViewModel") -> None:
@@ -696,6 +700,7 @@ class MainWindow(QMainWindow):
         """
         self._theme_manager.set_theme(mode)
         self._update_theme_actions()
+        self._save_theme_to_project()
     
     def _update_theme_actions(self) -> None:
         """Update theme action checked states."""
@@ -724,6 +729,38 @@ class MainWindow(QMainWindow):
         # Only apply if currently using system theme
         if self._theme_manager.get_current_mode() == ThemeMode.SYSTEM:
             self._theme_manager.apply_theme()
+    
+    def _load_theme_from_project(self, project_vm: "ProjectViewModel") -> None:
+        """Load theme preference from project settings.
+        
+        Args:
+            project_vm: ProjectViewModel with project data.
+        """
+        if not project_vm.project:
+            return
+        
+        # Get theme from UI preferences
+        theme_str = project_vm.project.ui_preferences.theme.lower()
+        
+        # Convert string to ThemeMode
+        try:
+            mode = ThemeMode(theme_str)
+        except ValueError:
+            mode = ThemeMode.SYSTEM
+        
+        # Set theme without saving (we're loading)
+        self._theme_manager._current_mode = mode
+        self._theme_manager.apply_theme()
+        self._update_theme_actions()
+    
+    def _save_theme_to_project(self) -> None:
+        """Save current theme preference to project settings."""
+        if not self._vm.project_vm.project:
+            return
+        
+        # Update UI preferences
+        self._vm.project_vm.project.ui_preferences.theme = self._theme_manager.get_current_mode().value
+        self._vm.project_vm.project.mark_dirty()
 
     def _on_sidebar_item_clicked(self, item) -> None:
         """Handle sidebar item click - switch active page."""
