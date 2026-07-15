@@ -521,6 +521,9 @@ class MainWindow(QMainWindow):
 
     def _close_project(self) -> None:
         """Close the current project after prompting to save if needed."""
+        # Cancel any pending auto-save
+        self._autosave.cancel_pending()
+
         # Check if there are unsaved changes
         if self._vm.project_vm and self._vm.project_vm.dirty:
             reply = QMessageBox.question(
@@ -547,7 +550,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Save project if dirty, then save window state and exit."""
-        # Auto-save if project has unsaved changes
+        # Cancel pending auto-save
+        self._autosave.cancel_pending()
+
+        # Save immediately if project has unsaved changes
         if self._vm.project_vm and self._vm.project_vm.dirty:
             self._status_bar.showMessage("Saving project...")
             self._vm.save_project()
