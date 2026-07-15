@@ -23,6 +23,7 @@ from house_photo_mapper.infrastructure.autosave import AutoSaveManager
 from house_photo_mapper.infrastructure.logging import get_logger
 from house_photo_mapper.infrastructure.platform import get_app_data_dir
 from house_photo_mapper.infrastructure.recovery import RecoveryScanner
+from house_photo_mapper.infrastructure.theme import ThemeManager, ThemeMode
 from house_photo_mapper.presentation.views.recovery_dialog import RecoveryDialog
 from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
@@ -78,6 +79,11 @@ class MainWindow(QMainWindow):
 
         self._vm = view_model
         self._persistence = persistence
+
+        # Create ThemeManager
+        self._theme_manager = ThemeManager(self)
+        self._theme_manager.theme_changed.connect(self._on_theme_changed)
+        self._theme_manager.system_theme_changed.connect(self._on_system_theme_changed)
 
         # Create PlanViewModel and wire to ProjectViewModel
         self._plan_vm = PlanViewModel()
@@ -353,6 +359,33 @@ class MainWindow(QMainWindow):
         statusbar_action.setChecked(True)
         statusbar_action.toggled.connect(self._toggle_statusbar)
         menu.addAction(statusbar_action)
+
+        # Theme submenu
+        menu.addSeparator()
+        theme_menu = menu.addMenu("&Theme")
+        
+        # Light mode action
+        self._light_theme_action = QAction("&Light Mode", self)
+        self._light_theme_action.setShortcut(QKeySequence("Cmd+Shift+D"))
+        self._light_theme_action.setStatusTip("Switch to light theme")
+        self._light_theme_action.triggered.connect(lambda: self._set_theme(ThemeMode.LIGHT))
+        theme_menu.addAction(self._light_theme_action)
+        
+        # Dark mode action
+        self._dark_theme_action = QAction("&Dark Mode", self)
+        self._dark_theme_action.setShortcut(QKeySequence("Cmd+Shift+D"))
+        self._dark_theme_action.setStatusTip("Switch to dark theme")
+        self._dark_theme_action.triggered.connect(lambda: self._set_theme(ThemeMode.DARK))
+        theme_menu.addAction(self._dark_theme_action)
+        
+        # System theme action
+        self._system_theme_action = QAction("&System", self)
+        self._system_theme_action.setStatusTip("Use system theme")
+        self._system_theme_action.triggered.connect(lambda: self._set_theme(ThemeMode.SYSTEM))
+        theme_menu.addAction(self._system_theme_action)
+        
+        # Update theme action states
+        self._update_theme_actions()
 
     def _add_window_actions(self, menu: QMenu) -> None:
         """Add actions to Window menu."""
@@ -648,6 +681,43 @@ class MainWindow(QMainWindow):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def _set_theme(self, mode: ThemeMode) -> None:
+        """Set the application theme.
+        
+        Args:
+            mode: ThemeMode to apply.
+        """
+        self._theme_manager.set_theme(mode)
+        self._update_theme_actions()
+    
+    def _update_theme_actions(self) -> None:
+        """Update theme action checked states."""
+        current_mode = self._theme_manager.get_current_mode()
+        self._light_theme_action.setChecked(current_mode == ThemeMode.LIGHT)
+        self._dark_theme_action.setChecked(current_mode == ThemeMode.DARK)
+        self._system_theme_action.setChecked(current_mode == ThemeMode.SYSTEM)
+    
+    @Slot(ThemeMode)
+    def _on_theme_changed(self, mode: ThemeMode) -> None:
+        """Handle theme change.
+        
+        Args:
+            mode: New ThemeMode.
+        """
+        self._theme_manager.apply_theme()
+        self._update_theme_actions()
+    
+    @Slot(ThemeMode)
+    def _on_system_theme_changed(self, mode: ThemeMode) -> None:
+        """Handle system theme change.
+        
+        Args:
+            mode: New system ThemeMode.
+        """
+        # Only apply if currently using system theme
+        if self._theme_manager.get_current_mode() == ThemeMode.SYSTEM:
+            self._theme_manager.apply_theme()
 
     def _on_sidebar_item_clicked(self, item) -> None:
         """Handle sidebar item click - switch active page."""
