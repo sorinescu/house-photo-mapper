@@ -10,6 +10,11 @@ from house_photo_mapper.domain.services.photo_importer import (
     scan_folder_recursive,
 )
 from house_photo_mapper.domain.services.plan_renderer import PlanRenderer
+from house_photo_mapper.domain.services.streaming_serializer import (
+    estimate_file_size,
+    read_photos_streaming,
+    serialize_large_arrays,
+)
 from house_photo_mapper.domain.services.thumbnail_generator import ThumbnailGenerator, ThumbnailWorker
 from house_photo_mapper.domain.services.tile_pyramid import TilePyramid, TileSpec
 
@@ -29,4 +34,7 @@ __all__ = [
     "ThumbnailWorker",
     "detect_duplicates",
     "mark_duplicates",
+    "serialize_large_arrays",
+    "read_photos_streaming",
+    "estimate_file_size",
 ]
