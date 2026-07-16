@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
+from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal, QPointF, QRectF
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
-    QGraphicsRectItem,
     QGraphicsPolygonItem,
-    QGraphicsItemGroup,
+    QGraphicsRectItem,
 )
 
 # Z-ordering constants
@@ -91,10 +90,9 @@ class GripItem(QGraphicsEllipseItem):
 class CameraMarkerItem(QGraphicsEllipseItem):
     """Red circle marking camera position on a plan.
 
-    Movable, selectable, and emits positionChanged when dragged.
+    Movable, selectable, and calls on_position_changed callback when dragged.
+    Optionally constrained to stay inside a bounding rectangle.
     """
-
-    positionChanged = Signal(float, float)
 
     MARKER_RADIUS = 24.0
 
@@ -113,6 +111,14 @@ class CameraMarkerItem(QGraphicsEllipseItem):
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable, True)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
+        self._bounds_rect: QRectF | None = None
+        self._on_position_changed: Callable[[float, float], None] | None = None
+        self._on_drag_finished: Callable[[float, float], None] | None = None
+        self._dragging: bool = False
+
+    def set_bounds_rect(self, rect: QRectF | None) -> None:
+        """Set the bounding rectangle this marker must stay inside."""
+        self._bounds_rect = rect
 
     def set_color(self, hex_color: str) -> None:
         """Update marker color."""
@@ -122,20 +128,37 @@ class CameraMarkerItem(QGraphicsEllipseItem):
         dark.setAlpha(200)
         self.setPen(QPen(dark, 1.5))
 
+    def mousePressEvent(self, event):
+        self._dragging = True
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._dragging = False
+        super().mouseReleaseEvent(event)
+        if self._on_drag_finished is not None:
+            self._on_drag_finished(self.pos().x(), self.pos().y())
+
     def itemChange(self, change, value):
         if change == QGraphicsEllipseItem.GraphicsItemChange.ItemPositionHasChanged:
             pos = self.pos()
-            self.positionChanged.emit(pos.x(), pos.y())
+            # Only constrain during user drag, not on programmatic setPos
+            if self._dragging and self._bounds_rect is not None:
+                r = self._bounds_rect
+                x = max(r.left() + self.MARKER_RADIUS, min(pos.x(), r.right() - self.MARKER_RADIUS))
+                y = max(r.top() + self.MARKER_RADIUS, min(pos.y(), r.bottom() - self.MARKER_RADIUS))
+                if x != pos.x() or y != pos.y():
+                    self.setPos(x, y)
+                    return super().itemChange(change, value)
+            if self._on_position_changed is not None:
+                self._on_position_changed(pos.x(), pos.y())
         return super().itemChange(change, value)
 
 
 class DirectionArrowItem(QGraphicsLineItem):
     """Arrow line indicating camera viewing direction.
 
-    Rotates around the camera marker position. Emits angleChanged on rotation.
+    Rotates around the camera marker position. Calls on_angle_changed callback on rotation.
     """
-
-    angleChanged = Signal(float)
 
     ARROW_LENGTH = 40.0
     ARROW_HEAD_LEN = 8.0
@@ -144,6 +167,7 @@ class DirectionArrowItem(QGraphicsLineItem):
         super().__init__(parent)
         self._marker = marker_item
         self._angle = angle
+        self._on_angle_changed: Callable[[float], None] | None = None
         self.setZValue(Z_ARROW)
         self.setPen(QPen(QColor(220, 40, 40), 2.0))
         self.setFlag(QGraphicsLineItem.GraphicsItemFlag.ItemIsSelectable, False)
@@ -163,7 +187,8 @@ class DirectionArrowItem(QGraphicsLineItem):
         """Set direction angle in degrees (0=right, CCW positive)."""
         self._angle = angle
         self._update_geometry()
-        self.angleChanged.emit(angle)
+        if self._on_angle_changed is not None:
+            self._on_angle_changed(angle)
 
     def set_color(self, hex_color: str) -> None:
         """Update arrow color."""
@@ -199,6 +224,7 @@ class ViewingConeItem(QGraphicsPolygonItem):
     """Semi-transparent polygon showing camera field of view cone.
 
     Updates based on marker position, direction angle, and cone angle.
+    Stores its own angle — no dependency on DirectionArrowItem.
     """
 
     CONE_LENGTH = 80.0
@@ -206,20 +232,29 @@ class ViewingConeItem(QGraphicsPolygonItem):
     def __init__(
         self,
         marker_item: CameraMarkerItem,
-        direction_item: DirectionArrowItem,
         cone_angle: float = 60.0,
+        direction_angle: float = 0.0,
         parent=None,
     ):
         super().__init__(parent)
         self._marker = marker_item
-        self._direction = direction_item
         self._cone_angle = cone_angle
+        self._direction_angle = direction_angle
         self.setZValue(Z_CONE)
 
         color = QColor(220, 40, 40, 40)
         self.setBrush(QBrush(color))
         self.setPen(QPen(QColor(220, 40, 40, 120), 1.0, Qt.PenStyle.DashLine))
         self.setFlag(QGraphicsPolygonItem.GraphicsItemFlag.ItemIsSelectable, False)
+
+    @property
+    def angle(self) -> float:
+        """Current direction angle in degrees."""
+        return self._direction_angle
+
+    def set_angle(self, angle: float) -> None:
+        """Set direction angle in degrees (0=right, CCW positive)."""
+        self._direction_angle = angle
 
     def set_cone_angle(self, angle: float) -> None:
         """Set cone spread angle in degrees."""
@@ -235,7 +270,7 @@ class ViewingConeItem(QGraphicsPolygonItem):
     def update_geometry(self) -> None:
         """Rebuild cone polygon from marker position, direction, and cone angle."""
         marker_pos = self._marker.pos()
-        direction = self._direction.angle
+        direction = self._direction_angle
         half = math.radians(self._cone_angle / 2.0)
 
         left_dir = math.radians(direction) + half
@@ -243,10 +278,10 @@ class ViewingConeItem(QGraphicsPolygonItem):
 
         tip = marker_pos
         left = tip + self.CONE_LENGTH * QPointF(
-            math.cos(math.pi - left_dir), -math.sin(math.pi - left_dir)
+            math.cos(left_dir), math.sin(left_dir)
         )
         right = tip + self.CONE_LENGTH * QPointF(
-            math.cos(math.pi - right_dir), -math.sin(math.pi - right_dir)
+            math.cos(right_dir), math.sin(right_dir)
         )
 
         polygon = QPolygonF([tip, left, right])
@@ -279,6 +314,8 @@ class VisibleAreaItem(QGraphicsRectItem):
 
         # Create 8 grip handles (4 corners + 4 edge midpoints)
         self._grips: list[GripItem] = []
+        self._on_resized: Callable[[], None] | None = None
+        self._on_area_clicked: Callable[[QPointF], None] | None = None
         self._create_grips()
 
     def _create_grips(self) -> None:
@@ -338,6 +375,10 @@ class VisibleAreaItem(QGraphicsRectItem):
         self.setRect(new_rect)
         self._update_grip_positions()
 
+        # Notify parent group to update marker bounds
+        if hasattr(self, '_on_resized') and self._on_resized is not None:
+            self._on_resized()
+
     def set_color(self, hex_color: str) -> None:
         """Update rectangle color."""
         c = hex_to_qcolor(hex_color, 35)
@@ -346,43 +387,65 @@ class VisibleAreaItem(QGraphicsRectItem):
         self.setPen(QPen(border, 1.5))
 
     def get_rect_data(self) -> list[float]:
-        """Get rectangle as [x, y, width, height]."""
-        r = self.rect()
+        """Get rectangle as [x, y, width, height] in scene coordinates."""
+        r = self.mapRectToScene(self.rect())
         return [r.x(), r.y(), r.width(), r.height()]
 
     def set_rect_data(self, data: list[float]) -> None:
-        """Set rectangle from [x, y, width, height]."""
+        """Set rectangle from [x, y, width, height] in scene coordinates."""
         if len(data) >= 4:
-            self.setRect(QRectF(data[0], data[1], data[2], data[3]))
+            scene_rect = QRectF(data[0], data[1], data[2], data[3])
+            # Position item so its local rect matches the scene rect
+            self.setPos(scene_rect.topLeft())
+            self.setRect(QRectF(0, 0, scene_rect.width(), scene_rect.height()))
             self._update_grip_positions()
+
+    def clear_grips(self) -> None:
+        """Clear grip list before item is removed from scene."""
+        self._grips.clear()
 
     def show_grips(self, visible: bool = True) -> None:
         """Show or hide grip handles."""
         for grip in self._grips:
-            grip.setVisible(visible)
+            try:
+                grip.setVisible(visible)
+            except RuntimeError:
+                # C++ object deleted — clear stale references
+                self._grips.clear()
+                break
+
+    def mousePressEvent(self, event):
+        """Notify view when area body is clicked (for group-drag)."""
+        if self._on_area_clicked is not None:
+            scene_pos = self.mapToScene(event.pos())
+            self._on_area_clicked(scene_pos)
+        super().mousePressEvent(event)
 
     def itemChange(self, change, value):
         if change == QGraphicsRectItem.GraphicsItemChange.ItemPositionHasChanged:
             self._update_grip_positions()
+        elif change == QGraphicsRectItem.GraphicsItemChange.ItemSceneHasChanged:
+            # When removed from scene, clear grips to avoid dangling C++ refs
+            if self.scene() is None:
+                self._grips.clear()
         return super().itemChange(change, value)
 
 
-class AnnotationGraphicsGroup(QGraphicsItemGroup):
-    """Groups all annotation items into a single selection/drag unit.
+class AnnotationGraphicsGroup:
+    """Plain data class grouping annotation items for a single annotation.
 
-    Stores annotation_id for linkage to the data model.
-    Z-ordering: area(1) < cone(2) < arrow(3) < marker(4) < grips(5).
+    Not a QGraphicsItemGroup — items live independently in the scene so each
+    can be selected, dragged, and resized individually.  The view coordinates
+    group-drag (move all items together) via mouse events.
     """
 
-    def __init__(self, annotation_id: str = "", parent=None):
-        super().__init__(parent)
-        self.setFlag(QGraphicsItemGroup.GraphicsItemFlag.ItemIsSelectable, True)
+    def __init__(self, annotation_id: str = ""):
         self._annotation_id = annotation_id
 
-        self._marker: Optional[CameraMarkerItem] = None
-        self._arrow: Optional[DirectionArrowItem] = None
-        self._cone: Optional[ViewingConeItem] = None
-        self._area: Optional[VisibleAreaItem] = None
+        self._marker: CameraMarkerItem | None = None
+        self._arrow: DirectionArrowItem | None = None
+        self._cone: ViewingConeItem | None = None
+        self._area: VisibleAreaItem | None = None
 
     @property
     def annotation_id(self) -> str:
@@ -391,25 +454,30 @@ class AnnotationGraphicsGroup(QGraphicsItemGroup):
     @annotation_id.setter
     def annotation_id(self, value: str) -> None:
         self._annotation_id = value
+        self.set_annotation_id(value)
 
     def set_items(
         self,
         marker: CameraMarkerItem,
-        arrow: DirectionArrowItem,
         cone: ViewingConeItem,
         area: VisibleAreaItem | None = None,
+        arrow: DirectionArrowItem | None = None,
     ) -> None:
-        """Add all sub-items to this group."""
+        """Store references to all sub-items.
+
+        Args:
+            marker: Camera position marker.
+            cone: Viewing cone (primary directional indicator).
+            area: Visible area rectangle (optional).
+            arrow: Direction arrow (optional, kept for backward compat).
+        """
         self._marker = marker
-        self._arrow = arrow
         self._cone = cone
         self._area = area
+        self._arrow = arrow
 
-        self.addToGroup(marker)
-        self.addToGroup(arrow)
-        self.addToGroup(cone)
-        if area is not None:
-            self.addToGroup(area)
+        # Cone follows marker automatically
+        marker._on_position_changed = lambda _x, _y: cone.update_geometry()
 
     def set_color(self, hex_color: str) -> None:
         """Apply color to all items in the group."""
@@ -419,7 +487,8 @@ class AnnotationGraphicsGroup(QGraphicsItemGroup):
             self._arrow.set_color(hex_color)
         if self._cone:
             self._cone.set_color(hex_color)
-        # Area keeps its own blue color; only marker/cone/arrow get annotation color
+        if self._area:
+            self._area.set_color(hex_color)
 
     def show_area_grips(self, visible: bool = True) -> None:
         """Show or hide resize grips on the area rectangle."""
@@ -441,3 +510,29 @@ class AnnotationGraphicsGroup(QGraphicsItemGroup):
     @property
     def area(self) -> VisibleAreaItem | None:
         return self._area
+
+    def all_items(self) -> list:
+        """Return all non-None items in z-order (area, cone, arrow, marker)."""
+        items = []
+        if self._area is not None:
+            items.append(self._area)
+        if self._cone is not None:
+            items.append(self._cone)
+        if self._arrow is not None:
+            items.append(self._arrow)
+        if self._marker is not None:
+            items.append(self._marker)
+        return items
+
+    def set_annotation_id(self, annotation_id: str) -> None:
+        """Set annotation_id on all child items for lookup."""
+        self._annotation_id = annotation_id
+        for item in [self._marker, self._cone, self._area, self._arrow]:
+            if item is not None:
+                item.setData(ANNOTATION_ID_ROLE, annotation_id)
+
+    def update_bounds_rect(self) -> None:
+        """Recalculate and apply the marker's bounds from the area rect."""
+        if self._marker is not None and self._area is not None:
+            scene_rect = self._area.mapRectToScene(self._area.rect())
+            self._marker.set_bounds_rect(scene_rect)

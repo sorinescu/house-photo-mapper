@@ -713,19 +713,19 @@ class CalibrationMixin:
 | A5 | ProcessPoolExecutor with maxtasksperchild=50 controls memory | Tile Pyramid | If workers still leak, need explicit worker recycle protocol |
 | A6 | Qt 6.11 LTS AnchorUnderMouse + viewport mouseTracking fixes first-wheel jump | PlanGraphicsView | If regression in Qt 6.12, need workaround from SO #79259323 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Tile pyramid eviction policy**: LRU by level? By recency? What max cache size (MB)?  
-   *Recommendation:* Start with 200MB LRU across all levels; monitor in Phase 5 perf baseline.
+   **RESOLVED**: Start with 200MB LRU across all levels; monitor in Phase 5 perf baseline.
 
 2. **Calibration per-page vs per-project**: Architectural plans often have different scales per sheet.  
-   *Recommendation:* Per-page CalibrationModel (stored in PlanModel.pages[]); Phase 2 implements per-page, UI shows active page calibration.
+   **RESOLVED**: Per-page CalibrationModel (stored in PlanModel.pages[]); Phase 2 implements per-page, UI shows active page calibration.
 
 3. **Background tile generation priority**: Viewport-visible tiles first, then surrounding, then full pyramid?  
-   *Recommendation:* Priority queue: current viewport tiles at current zoom level → adjacent → other levels.
+   **RESOLVED**: Priority queue: current viewport tiles at current zoom level → adjacent → other levels.
 
 4. **PDF password-protected handling**: PyMuPDF supports `doc.authenticate(password)`.  
-   *Recommendation:* Defer to Phase 3/5; show password dialog on import failure.
+   **RESOLVED**: Defer to Phase 3/5; show password dialog on import failure.
 
 ## Environment Availability
 

@@ -14,8 +14,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QObject, QRunnable, Slot, QPointF, QPoint, Qt
-from PySide6.QtGui import QPainter, QWheelEvent, QMouseEvent, QKeyEvent
+from PySide6.QtCore import QObject, QPoint, QPointF, QRunnable, Qt, Slot
+from PySide6.QtGui import QKeyEvent, QMouseEvent, QPainter, QWheelEvent
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 if TYPE_CHECKING:
@@ -250,6 +250,12 @@ class PlanGraphicsView(QGraphicsView):
         self._cone_drag_active = False
         self._cone_drag_annotation_id: str | None = None
 
+        # Group drag state (SELECT tool: move all items in annotation together)
+        self._group_drag_active = False
+        self._group_drag_annotation_id: str | None = None
+        self._group_drag_start_pos: QPointF = QPointF()
+        self._group_drag_item_positions: dict[str, QPointF] = {}
+
         # Zoom centers on mouse cursor (RESEARCH.md Pitfall 5 fix)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -293,26 +299,34 @@ class PlanGraphicsView(QGraphicsView):
             self._pending_group = None
 
     def _on_annotation_removed(self, annotation_id: str) -> None:
-        """Remove graphics group for deleted annotation."""
+        """Remove annotation items from scene."""
+        # Cancel any active drag for this annotation
+        if self._cone_drag_annotation_id == annotation_id:
+            self._cone_drag_active = False
+            self._cone_drag_annotation_id = None
+        if self._group_drag_annotation_id == annotation_id:
+            self._group_drag_active = False
+            self._group_drag_annotation_id = None
+            self._group_drag_item_positions = {}
+
         group = self._annotation_groups.pop(annotation_id, None)
         if group is not None:
-            # Remove all child items from scene
-            for item in group.childItems():
+            # Clear grips BEFORE removing items to avoid dangling C++ refs
+            if group.area is not None:
+                group.area.clear_grips()
+            for item in group.all_items():
                 self.scene().removeItem(item)
-            self.scene().removeItem(group)
 
     def _on_annotations_changed(self, annotation_ids: list) -> None:
         """Sync scene markers with ViewModel annotations (handles loaded annotations)."""
         if self._annotation_vm is None:
             return
-        from house_photo_mapper.presentation.graphics.annotation_items import (
-            AnnotationGraphicsGroup,
-            CameraMarkerItem,
-            DirectionArrowItem,
-            ViewingConeItem,
-            VisibleAreaItem,
-            DEFAULT_ANNOTATION_COLOR,
-        )
+        # Remove stale groups for annotations not in the new set
+        new_ids = set(annotation_ids)
+        stale_ids = [ann_id for ann_id in self._annotation_groups if ann_id not in new_ids]
+        for ann_id in stale_ids:
+            self._annotation_groups.pop(ann_id, None)
+        # Create groups for new annotations
         for ann_id in annotation_ids:
             if ann_id not in self._annotation_groups:
                 ann = self._annotation_vm.get_annotation(ann_id)
@@ -320,37 +334,56 @@ class PlanGraphicsView(QGraphicsView):
                     self._create_annotation_group(ann, ann_id)
 
     def _create_annotation_group(self, ann, ann_id: str) -> None:
-        """Create a full annotation group (marker + arrow + cone + rectangle)."""
+        """Create a full annotation group (marker + cone + rectangle)."""
         from house_photo_mapper.presentation.graphics.annotation_items import (
             AnnotationGraphicsGroup,
             CameraMarkerItem,
-            DirectionArrowItem,
             ViewingConeItem,
             VisibleAreaItem,
         )
 
-        marker = CameraMarkerItem(x=ann.position_x, y=ann.position_y)
-        arrow = DirectionArrowItem(marker, angle=ann.direction_angle)
-        cone = ViewingConeItem(marker, arrow, cone_angle=ann.cone_angle)
+        # Create area FIRST so we can compute bounds before creating marker
+        if ann.visible_area and len(ann.visible_area) >= 1:
+            rect_data = ann.visible_area[0]
+            if len(rect_data) >= 4:
+                area = VisibleAreaItem(0, 0, rect_data[2], rect_data[3])
+                area.set_rect_data(rect_data)
+            else:
+                area = VisibleAreaItem(ann.position_x - 80, ann.position_y - 60, 160, 120)
+        else:
+            rect_w, rect_h = 160.0, 120.0
+            area = VisibleAreaItem(
+                ann.position_x - rect_w / 2,
+                ann.position_y - rect_h / 2,
+                rect_w,
+                rect_h,
+            )
 
-        # Create default rectangle around marker (160x120 centered on marker)
-        rect_w, rect_h = 160.0, 120.0
-        area = VisibleAreaItem(
-            ann.position_x - rect_w / 2,
-            ann.position_y - rect_h / 2,
-            rect_w,
-            rect_h,
-        )
+        # Compute bounds from area BEFORE creating marker
+        bounds_rect = area.mapRectToScene(area.rect())
+
+        # Create marker — bounds will be set before addItem so position isn't re-clamped
+        marker = CameraMarkerItem(x=ann.position_x, y=ann.position_y)
+        cone = ViewingConeItem(marker, cone_angle=ann.cone_angle, direction_angle=ann.direction_angle)
+
+        # Set bounds BEFORE adding to scene — prevents itemChange from re-clamping
+        marker.set_bounds_rect(bounds_rect)
 
         group = AnnotationGraphicsGroup(annotation_id=ann_id)
-        group.set_items(marker, arrow, cone, area)
+        group.set_items(marker, cone, area)
 
-        # Add all items to scene
+        # Wire up resize/move callbacks
+        area._on_resized = lambda: self._on_area_resized(group)
+        area._on_area_clicked = lambda pos: self._on_area_body_clicked(group, pos)
+
+        # Wire up marker drag-finish to persist position to model
+        if self._annotation_vm is not None:
+            marker._on_drag_finished = lambda x, y: self._on_marker_drag_finished(ann_id, x, y)
+
+        # Add items individually to scene
         self.scene().addItem(area)
         self.scene().addItem(cone)
-        self.scene().addItem(arrow)
         self.scene().addItem(marker)
-        self.scene().addItem(group)
 
         # Apply color if set
         color = getattr(ann, 'color', '') or ''
@@ -378,12 +411,13 @@ class PlanGraphicsView(QGraphicsView):
         for item in selected:
             if isinstance(item, GripItem):
                 continue
-            for ann_id, group in self._annotation_groups.items():
-                if item == group or item in group.childItems():
-                    self._annotation_vm.select_annotation(ann_id)
-                    # Show grips for selected annotation's area
+            ann_id = self._find_annotation_id_for_item(item)
+            if ann_id is not None:
+                self._annotation_vm.select_annotation(ann_id)
+                group = self._annotation_groups.get(ann_id)
+                if group is not None:
                     group.show_area_grips(True)
-                    return
+                return
 
         # If nothing matched, hide grips
         for group in self._annotation_groups.values():
@@ -422,17 +456,20 @@ class PlanGraphicsView(QGraphicsView):
             elif self._annotation_vm.tool_state == ToolState.SET_CONE:
                 self._handle_cone_press(event)
                 return
+            elif self._annotation_vm.tool_state == ToolState.SELECT:
+                if self._handle_group_drag_press(event):
+                    return
+                super().mousePressEvent(event)
             else:
                 super().mousePressEvent(event)
         else:
             super().mousePressEvent(event)
 
     def _handle_place_marker(self, event: QMouseEvent) -> None:
-        """Create marker, arrow, cone, and rectangle group at click position."""
+        """Create marker, cone, and rectangle group at click position."""
         from house_photo_mapper.presentation.graphics.annotation_items import (
             AnnotationGraphicsGroup,
             CameraMarkerItem,
-            DirectionArrowItem,
             ViewingConeItem,
             VisibleAreaItem,
         )
@@ -441,8 +478,7 @@ class PlanGraphicsView(QGraphicsView):
 
         # Create all items for the group
         marker = CameraMarkerItem(x=scene_pos.x(), y=scene_pos.y())
-        arrow = DirectionArrowItem(marker, angle=0.0)
-        cone = ViewingConeItem(marker, arrow, cone_angle=60.0)
+        cone = ViewingConeItem(marker, cone_angle=60.0, direction_angle=0.0)
 
         # Default rectangle: 160x120 centered on marker
         rect_w, rect_h = 160.0, 120.0
@@ -453,15 +489,29 @@ class PlanGraphicsView(QGraphicsView):
             rect_h,
         )
 
-        group = AnnotationGraphicsGroup()
-        group.set_items(marker, arrow, cone, area)
+        # Marker is constrained to stay inside the rectangle
+        marker.set_bounds_rect(area.mapRectToScene(area.rect()))
 
-        # Add items to scene in correct z-order
+        group = AnnotationGraphicsGroup()
+        group.set_items(marker, cone, area)
+
+        # Apply default annotation color
+        from house_photo_mapper.presentation.graphics.annotation_items import (
+            DEFAULT_ANNOTATION_COLOR,
+        )
+        group.set_color(DEFAULT_ANNOTATION_COLOR)
+
+        # Wire up resize/move callbacks
+        area._on_resized = lambda: self._on_area_resized(group)
+        area._on_area_clicked = lambda pos: self._on_area_body_clicked(group, pos)
+
+        # Wire up marker drag-finish to persist position to model
+        marker._on_drag_finished = lambda x, y: self._on_marker_drag_finished(group.annotation_id, x, y)
+
+        # Add items individually to scene (no addToGroup)
         self.scene().addItem(area)
         self.scene().addItem(cone)
-        self.scene().addItem(arrow)
         self.scene().addItem(marker)
-        self.scene().addItem(group)
 
         # Store pending group — annotation_added signal will link it
         self._pending_group = group
@@ -469,8 +519,17 @@ class PlanGraphicsView(QGraphicsView):
         # Update cone geometry
         cone.update_geometry()
 
-        # Store position in ViewModel (triggers annotation_added)
+        # Store position in ViewModel (triggers annotation_added → _on_annotation_added)
         self._annotation_vm.place_marker(scene_pos.x(), scene_pos.y())
+
+        # Set initial visible_area on the model (group is now in _annotation_groups)
+        for aid, g in self._annotation_groups.items():
+            if g is group:
+                ann = self._annotation_vm.get_annotation(aid)
+                if ann is not None:
+                    ann.visible_area = [area.get_rect_data()]
+                break
+
         event.accept()
 
     def _handle_cone_press(self, event: QMouseEvent) -> None:
@@ -489,7 +548,6 @@ class PlanGraphicsView(QGraphicsView):
     def _find_nearest_annotation(self, scene_pos: QPointF) -> str | None:
         """Find annotation_id whose marker is nearest to scene_pos."""
         import math
-        from house_photo_mapper.presentation.graphics.annotation_items import CameraMarkerItem
 
         best_id = None
         best_dist = float("inf")
@@ -503,8 +561,120 @@ class PlanGraphicsView(QGraphicsView):
                     best_id = ann_id
         return best_id
 
+    def _find_annotation_id_for_item(self, item) -> str | None:
+        """Find annotation_id that owns the given graphics item."""
+        from house_photo_mapper.presentation.graphics.annotation_items import GripItem
+
+        if isinstance(item, GripItem):
+            return None
+        for ann_id, group in self._annotation_groups.items():
+            if item in group.all_items():
+                return ann_id
+        return None
+
+    def _handle_group_drag_press(self, event: QMouseEvent) -> bool:
+        """Start group drag if click is on an annotation item. Returns True if handled."""
+        from house_photo_mapper.presentation.graphics.annotation_items import GripItem
+
+        scene_pos = self.mapToScene(event.position().toPoint())
+        items_at = self.items(scene_pos.toPoint())
+
+        for item in items_at:
+            if isinstance(item, GripItem):
+                # Let grip handle its own drag
+                return False
+            ann_id = self._find_annotation_id_for_item(item)
+            if ann_id is not None:
+                self._group_drag_active = True
+                self._group_drag_annotation_id = ann_id
+                self._group_drag_start_pos = scene_pos
+                # Store initial positions of all items in this annotation
+                group = self._annotation_groups[ann_id]
+                self._group_drag_item_positions = {
+                    type(it).__name__: it.pos() for it in group.all_items()
+                }
+                # Also store area position separately for bounds tracking
+                self._group_drag_area_start_pos = group.area.pos() if group.area else QPointF()
+                event.accept()
+                return True
+
+        return False
+
+    def _on_area_resized(self, group) -> None:
+        """Sync model after area resize — bounds + visible_area."""
+        group.update_bounds_rect()
+        if self._annotation_vm is not None:
+            ann = self._annotation_vm.get_annotation(group.annotation_id)
+            if ann is not None and group.area is not None:
+                ann.visible_area = [group.area.get_rect_data()]
+
+    def _on_marker_drag_finished(self, annotation_id: str, x: float, y: float) -> None:
+        """Sync model after Qt-native marker drag (ItemIsMovable path)."""
+        if self._annotation_vm is None:
+            return
+        ann = self._annotation_vm.get_annotation(annotation_id)
+        if ann is not None:
+            ann.position_x = x
+            ann.position_y = y
+
+    def _on_area_body_clicked(self, group, scene_pos: QPointF) -> None:
+        """Start group drag when area body is clicked (called from area's mousePressEvent)."""
+        if self._annotation_vm is None:
+            return
+        from house_photo_mapper.presentation.viewmodels.annotation_vm import ToolState
+        if self._annotation_vm.tool_state != ToolState.SELECT:
+            return
+
+        ann_id = group.annotation_id
+        if not ann_id:
+            return
+
+        self._group_drag_active = True
+        self._group_drag_annotation_id = ann_id
+        self._group_drag_start_pos = scene_pos
+        self._group_drag_item_positions = {
+            type(it).__name__: it.pos() for it in group.all_items()
+        }
+
+    def _handle_group_drag_move(self, event: QMouseEvent) -> None:
+        """Move all items in the annotation by the drag delta."""
+        scene_pos = self.mapToScene(event.position().toPoint())
+        group = self._annotation_groups.get(self._group_drag_annotation_id)
+        if group is None:
+            return
+
+        delta = scene_pos - self._group_drag_start_pos
+
+        # Move area
+        if group.area is not None:
+            start = self._group_drag_item_positions.get("VisibleAreaItem")
+            if start is not None:
+                group.area.setPos(start + delta)
+                group.area._update_grip_positions()
+                # Update marker bounds to match new area position
+                group.update_bounds_rect()
+
+        # Move marker (clamped to area bounds)
+        if group.marker is not None:
+            start = self._group_drag_item_positions.get("CameraMarkerItem")
+            if start is not None:
+                new_pos = start + delta
+                # Constrain to area bounds
+                if group.area is not None:
+                    area_rect = group.area.mapRectToScene(group.area.rect())
+                    r = group.marker
+                    mr = r.MARKER_RADIUS
+                    new_pos = QPointF(
+                        max(area_rect.left() + mr, min(new_pos.x(), area_rect.right() - mr)),
+                        max(area_rect.top() + mr, min(new_pos.y(), area_rect.bottom() - mr)),
+                    )
+                group.marker.setPos(new_pos)
+                # Update cone position via callback
+                if group.cone is not None:
+                    group.cone.update_geometry()
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse move: pan or cone rotation."""
+        """Handle mouse move: pan, cone rotation, or group drag."""
         if self._pan_active:
             delta = event.position() - self._pan_start
             # Translate in view coordinates, compensating for current scale
@@ -514,6 +684,9 @@ class PlanGraphicsView(QGraphicsView):
             event.accept()
         elif self._cone_drag_active and self._cone_drag_annotation_id:
             self._handle_cone_drag(event)
+        elif self._group_drag_active and self._group_drag_annotation_id:
+            self._handle_group_drag_move(event)
+            event.accept()
         else:
             super().mouseMoveEvent(event)
 
@@ -523,33 +696,55 @@ class PlanGraphicsView(QGraphicsView):
 
         scene_pos = self.mapToScene(event.position().toPoint())
         group = self._annotation_groups.get(self._cone_drag_annotation_id)
-        if group is None or group.marker is None:
+        if group is None or group.marker is None or group.cone is None:
             return
 
         marker_pos = group.marker.pos()
         dx = scene_pos.x() - marker_pos.x()
         dy = scene_pos.y() - marker_pos.y()
 
-        # Calculate angle from marker to mouse (in degrees, 0=right, CCW)
-        angle = math.degrees(math.atan2(-dy, dx))
+        # Calculate angle from marker to mouse (in degrees, 0=right, CW positive for screen coords)
+        angle = math.degrees(math.atan2(dy, dx))
 
-        # Update cone direction and geometry
-        if group.arrow:
-            group.arrow.set_angle(angle)
-        if group.cone:
-            group.cone.update_geometry()
+        # Update cone direction directly
+        group.cone.set_angle(angle)
+        group.cone.update_geometry()
 
         event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """Handle mouse release: end pan or cone drag."""
+        """Handle mouse release: end pan, cone drag, or group drag."""
         if event.button() == Qt.MouseButton.MiddleButton and self._pan_active:
             self._pan_active = False
             self.unsetCursor()
             event.accept()
         elif self._cone_drag_active:
+            # Sync direction_angle to model
+            group = self._annotation_groups.get(self._cone_drag_annotation_id)
+            if group is not None and group.cone is not None:
+                ann = self._annotation_vm.get_annotation(self._cone_drag_annotation_id) if self._annotation_vm else None
+                if ann is not None:
+                    ann.direction_angle = group.cone.angle
             self._cone_drag_active = False
             self._cone_drag_annotation_id = None
+            event.accept()
+        elif self._group_drag_active:
+            # Sync position and visible_area to model
+            group = self._annotation_groups.get(self._group_drag_annotation_id)
+            if group is not None and self._annotation_vm is not None:
+                ann = self._annotation_vm.get_annotation(self._group_drag_annotation_id)
+                if ann is not None:
+                    if group.marker is not None:
+                        ann.position_x = group.marker.pos().x()
+                        ann.position_y = group.marker.pos().y()
+                    if group.area is not None:
+                        ann.visible_area = [group.area.get_rect_data()]
+            # Update bounds rect after drag
+            if group is not None:
+                group.update_bounds_rect()
+            self._group_drag_active = False
+            self._group_drag_annotation_id = None
+            self._group_drag_item_positions = {}
             event.accept()
         else:
             super().mouseReleaseEvent(event)

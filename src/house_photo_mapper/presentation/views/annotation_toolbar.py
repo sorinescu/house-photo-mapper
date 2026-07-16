@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QButtonGroup, QToolBar, QToolButton
 
 
 class AnnotationToolbar(QToolBar):
-    """Toolbar with Select, Place Marker, and Set Cone tool buttons.
+    """Toolbar with Select, Add annotation, and Set Cone tool buttons.
 
     Emits tool_selected when a tool button is clicked.
     """
@@ -16,6 +16,7 @@ class AnnotationToolbar(QToolBar):
 
     def __init__(self, parent=None) -> None:
         super().__init__("Annotation", parent)
+        self.setObjectName("AnnotationToolbar")
 
         self._btn_select = QToolButton(self)
         self._btn_select.setText("Select")
@@ -24,14 +25,14 @@ class AnnotationToolbar(QToolBar):
         self._btn_select.setToolTip("Select and move annotations (V)")
 
         self._btn_place = QToolButton(self)
-        self._btn_place.setText("Place Marker")
+        self._btn_place.setText("Add annotation")
         self._btn_place.setCheckable(True)
-        self._btn_place.setToolTip("Place a camera marker (Ctrl+Shift+A)")
+        self._btn_place.setToolTip("Add a new annotation (Ctrl+Shift+A)")
 
         self._btn_cone = QToolButton(self)
-        self._btn_cone.setText("Set Cone")
+        self._btn_cone.setText("Rotate viewpoint")
         self._btn_cone.setCheckable(True)
-        self._btn_cone.setToolTip("Adjust viewing cone direction")
+        self._btn_cone.setToolTip("Rotate the viewing cone direction")
 
         self.addWidget(self._btn_select)
         self.addWidget(self._btn_place)

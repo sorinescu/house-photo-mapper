@@ -262,7 +262,7 @@ class PersistenceService:
         for i, annotation in enumerate(project.annotations):
             if not annotation.get("annotation_id"):
                 warnings.append(f"Annotation {i} missing annotation_id field")
-            if not annotation.get("position"):
+            if "position_x" not in annotation or "position_y" not in annotation:
                 warnings.append(f"Annotation {i} missing position field")
 
         return warnings

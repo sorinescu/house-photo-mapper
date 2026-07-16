@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Photo System** - Drag-drop/folder import, EXIF extraction, duplicate detection, lazy-loaded thumbnails (completed 2026-07-14)
 - [x] **Phase 4: Annotation Tools** - Camera marker, direction arrow, viewing cone, visible polygon, metadata, undo/redo, shortcuts (completed 2026-07-15)
 - [x] **Phase 5: Project Persistence & Performance** - JSON serialization, auto-save, crash recovery, dark/light mode, <100ms viewport
-- [ ] **Phase 6: Report Generation** - Professional PDF reports with photo, plan snippet, camera symbol, cone, metadata, figure numbers
+- [x] **Phase 6: Report Generation** - Professional PDF reports with photo, plan snippet, camera symbol, cone, metadata, figure numbers (completed 2026-07-15)
 - [ ] **Phase 7: Polish, Packaging & Ship** - macOS notarized DMG, CI/CD, user guide, API docs, v1.0 release
 
 ## Phase Details
@@ -188,15 +188,15 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — Install reportlab, create PlanSnippet + CameraOverlay domain services
+- [x] 06-01-PLAN.md — Install reportlab, create PlanSnippet + CameraOverlay domain services
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md — ReportGeneratorService, ReportViewModel, LayoutDialog
+- [x] 06-02-PLAN.md — ReportGeneratorService, ReportViewModel, LayoutDialog
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 06-03-PLAN.md — ReportProgressDialog, MainWindow integration, end-to-end flow
+- [x] 06-03-PLAN.md — ReportProgressDialog, MainWindow integration, end-to-end flow
 
 ### Phase 7: Polish, Packaging & Ship
 
@@ -231,10 +231,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Core Architecture | 5/5 | Complete    | 2026-07-13 |
 | 2. Plan System | 8/8 | Complete | 2026-07-14 |
 | 3. Photo System | 7/7 | Complete | 2026-07-14 |
-| 4. Annotation Tools | 7/6 | Complete   | 2026-07-15 |
+| 4. Annotation Tools | 6/6 | Complete   | 2026-07-15 |
 | 5. Project Persistence & Performance | 5/5 | Complete | 2026-07-15 |
-| 6. Report Generation | 0/TBD | Not started | - |
-| 7. Polish, Packaging & Ship | 0/TBD | Not started | - |
+| 6. Report Generation | 3/3 | Complete | 2026-07-15 |
+| 7. Polish, Packaging & Ship | 0/5 | Not started | - |
 
 ## Parallelization & Critical Path
 

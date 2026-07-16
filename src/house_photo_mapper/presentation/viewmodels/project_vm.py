@@ -147,8 +147,9 @@ class ProjectViewModel(QtSafeViewModel):
                 for ann_data in self._project.annotations:
                     ann = AnnotationModel.from_project_json(ann_data)
                     self._annotation_vm._annotations[ann.annotation_id] = ann
+                # Only emit for the current page, not all annotations
                 self._annotation_vm.annotations_changed.emit(
-                    [a.annotation_id for a in self._annotation_vm.get_all_annotations()]
+                    [a.annotation_id for a in self._annotation_vm.current_annotations]
                 )
 
             self._emit_project_changed()

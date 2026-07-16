@@ -12,7 +12,6 @@ from house_photo_mapper.infrastructure.qt_patterns import PlanGraphicsScene, Pla
 from house_photo_mapper.presentation.graphics.annotation_items import (
     AnnotationGraphicsGroup,
     CameraMarkerItem,
-    DirectionArrowItem,
     ViewingConeItem,
 )
 

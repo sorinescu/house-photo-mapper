@@ -332,6 +332,9 @@ class MainWindowViewModel(QtSafeViewModel):
                     "position_y": ann.position_y,
                     "page_index": ann.page_index,
                     "floor": ann.floor,
+                    "color": ann.color,
+                    "cone_angle": ann.cone_angle,
+                    "direction_angle": ann.direction_angle,
                 })
 
             with open(path, "w") as f:

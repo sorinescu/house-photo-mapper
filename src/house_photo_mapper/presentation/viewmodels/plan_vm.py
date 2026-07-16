@@ -217,7 +217,17 @@ class PlanViewModel(QtSafeViewModel):
         self._initial_fit_done = False
         self.page_changed.emit(index)
 
-        # Notify annotation VM of page change
+        # Render page if renderer available — clear scene BEFORE creating annotations
+        if self._plan_renderer is not None:
+            page = sorted_pages[index]
+            try:
+                pixmap = self._plan_renderer.render_page(page.page_index, dpi=150)
+                self._current_pixmap = pixmap
+                self.pixmap_ready.emit(pixmap)
+            except Exception as e:
+                self.error_occurred.emit(f"Failed to render page: {e}")
+
+        # Notify annotation VM of page change (after scene is cleared)
         if self._annotation_vm is not None:
             sorted_pages = self._plan_model.get_sorted_pages()
             if 0 <= index < len(sorted_pages):
@@ -227,17 +237,6 @@ class PlanViewModel(QtSafeViewModel):
         sorted_pages = self._plan_model.get_sorted_pages()
         if 0 <= index < len(sorted_pages):
             self.calibration_changed.emit(sorted_pages[index].calibration)
-
-        # Render page if renderer available
-        if self._plan_renderer is not None:
-            page = sorted_pages[index]
-            try:
-                # Use 150 DPI as base rendering resolution
-                pixmap = self._plan_renderer.render_page(page.page_index, dpi=150)
-                self._current_pixmap = pixmap
-                self.pixmap_ready.emit(pixmap)
-            except Exception as e:
-                self.error_occurred.emit(f"Failed to render page: {e}")
 
     def request_page_render(self, page_index: int) -> None:
         """Render a specific page and emit page_rendered signal.

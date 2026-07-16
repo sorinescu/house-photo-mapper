@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QColor
+from pathlib import Path
+
+from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
     QFormLayout,
@@ -59,6 +61,7 @@ class AnnotationPropertiesPanel(QWidget):
 
     save_requested = Signal(str, str, str, str)  # annotation_id, title, description, tags_csv
     color_changed = Signal(str, str)  # annotation_id, hex_color
+    link_photo_requested = Signal(str)  # annotation_id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -92,6 +95,29 @@ class AnnotationPropertiesPanel(QWidget):
 
         layout.addLayout(form)
 
+        # Photo section
+        photo_layout = QHBoxLayout()
+
+        self._photo_thumbnail = QLabel()
+        self._photo_thumbnail.setFixedSize(60, 60)
+        self._photo_thumbnail.setStyleSheet("border: 1px solid #888; background-color: #f0f0f0;")
+        self._photo_thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        photo_layout.addWidget(self._photo_thumbnail)
+
+        photo_btn_layout = QVBoxLayout()
+        self._photo_label = QLabel("No photo linked")
+        self._photo_label.setStyleSheet("color: #888;")
+        photo_btn_layout.addWidget(self._photo_label)
+
+        self._link_photo_btn = QPushButton("Link Photo")
+        self._link_photo_btn.setEnabled(False)
+        self._link_photo_btn.clicked.connect(self._on_link_photo)
+        photo_btn_layout.addWidget(self._link_photo_btn)
+
+        photo_layout.addLayout(photo_btn_layout)
+        photo_layout.addStretch()
+        layout.addLayout(photo_layout)
+
         btn_layout = QHBoxLayout()
         self._save_btn = QPushButton("Save")
         self._save_btn.setEnabled(False)
@@ -104,6 +130,31 @@ class AnnotationPropertiesPanel(QWidget):
 
     def _on_text_changed(self, text: str) -> None:
         self._save_btn.setEnabled(bool(text.strip()) and self._annotation_id is not None)
+
+    def _on_link_photo(self) -> None:
+        if self._annotation_id is not None:
+            self.link_photo_requested.emit(self._annotation_id)
+
+    def set_photo_thumbnail(self, photo_path: str | None) -> None:
+        """Set the photo thumbnail from a file path."""
+        if photo_path and Path(photo_path).is_file():
+            pixmap = QPixmap(photo_path)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    56, 56, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self._photo_thumbnail.setPixmap(scaled)
+                self._photo_label.setText(Path(photo_path).name)
+                self._photo_label.setStyleSheet("")
+                return
+        self._photo_thumbnail.clear()
+        self._photo_label.setText("No photo linked")
+        self._photo_label.setStyleSheet("color: #888;")
+
+    def set_link_photo_enabled(self, enabled: bool) -> None:
+        """Enable/disable the Link Photo button."""
+        self._link_photo_btn.setEnabled(enabled)
 
     def _on_color_changed(self, color: str) -> None:
         if self._annotation_id is not None:
@@ -120,7 +171,8 @@ class AnnotationPropertiesPanel(QWidget):
         )
 
     def show_annotation(
-        self, annotation_id: str, title: str, description: str, tags: list[str], color: str = "#DC2828"
+        self, annotation_id: str, title: str, description: str, tags: list[str], color: str = "#DC2828",
+        photo_path: str | None = None,
     ) -> None:
         """Populate fields for a selected annotation."""
         self._annotation_id = annotation_id
@@ -128,6 +180,7 @@ class AnnotationPropertiesPanel(QWidget):
         self._desc_edit.setPlainText(description)
         self._tags_edit.setText(", ".join(tags))
         self._color_btn.set_color(color)
+        self.set_photo_thumbnail(photo_path)
         self._save_btn.setEnabled(bool(title.strip()))
         self.setVisible(True)
 
@@ -138,5 +191,6 @@ class AnnotationPropertiesPanel(QWidget):
         self._desc_edit.clear()
         self._tags_edit.clear()
         self._color_btn.set_color("#DC2828")
+        self.set_photo_thumbnail(None)
         self._save_btn.setEnabled(False)
         self.setVisible(False)
