@@ -578,9 +578,11 @@ class MainWindow(QMainWindow):
         self._annotation_vm.annotation_removed.connect(self._on_annotation_removed)
         self._annotation_panel.save_requested.connect(self._annotation_vm.update_annotation_metadata)
         self._annotation_panel.color_changed.connect(self._on_annotation_color_changed)
+        self._annotation_panel.link_photo_requested.connect(self._on_link_photo_requested)
 
         # Connect photo browser ↔ annotation sync
         self._annotation_vm.annotation_selected.connect(self._highlight_photo_for_annotation)
+        self._photo_vm.selection_changed.connect(self._on_photo_selection_changed)
 
     def _connect_signals(self) -> None:
         """Connect ViewModel signals to UI slots."""
@@ -886,16 +888,36 @@ class MainWindow(QMainWindow):
         """Handle annotation selection - show properties panel."""
         ann = self._annotation_vm.get_annotation(annotation_id)
         if ann:
+            # Resolve photo path to absolute for thumbnail
+            # Use original_path from PhotoModel (handles external imports)
+            photo_path = None
+            if ann.photo_path:
+                # Find the linked photo to get its original_path
+                for p in self._photo_vm.photos:
+                    if p.path == ann.photo_path:
+                        if p.original_path:
+                            photo_path = p.original_path
+                        else:
+                            # Fallback to project_dir / relative_path
+                            project_dir = str(Path(self._vm.project.path).parent) if self._vm.project and self._vm.project.path else ""
+                            if project_dir:
+                                photo_path = str(Path(project_dir) / ann.photo_path)
+                        break
             self._annotation_panel.show_annotation(
-                ann.annotation_id, ann.title, ann.description, ann.tags, ann.color
+                ann.annotation_id, ann.title, ann.description, ann.tags, ann.color,
+                photo_path=photo_path,
             )
             self._delete_action.setEnabled(True)
+            # Enable link button if a photo is selected
+            has_selection = self._photo_vm.selected_photo is not None
+            self._annotation_panel.set_link_photo_enabled(has_selection)
 
     @Slot()
     def _on_annotation_deselected(self) -> None:
         """Handle annotation deselection - hide properties panel."""
         self._annotation_panel.clear()
         self._delete_action.setEnabled(False)
+        self._annotation_panel.set_link_photo_enabled(False)
 
     @Slot(str)
     def _on_annotation_added(self, annotation_id: str) -> None:
@@ -930,6 +952,40 @@ class MainWindow(QMainWindow):
             group = plan_view._view._annotation_groups.get(annotation_id)
             if group:
                 group.set_color(color)
+
+    @Slot(str)
+    def _on_link_photo_requested(self, annotation_id: str) -> None:
+        """Link the currently selected photo to the annotation."""
+        selected_photo = self._photo_vm.selected_photo
+        if not selected_photo:
+            return
+        ann = self._annotation_vm.get_annotation(annotation_id)
+        if not ann:
+            return
+        # Unlink previous photo if any
+        if ann.photo_path:
+            for photo in self._photo_vm.photos:
+                if photo.path == ann.photo_path:
+                    photo.annotation_id = None
+                    break
+        # Link new photo
+        ann.photo_path = selected_photo.path
+        selected_photo.annotation_id = annotation_id
+        # Update thumbnail in panel - use original_path for external imports
+        if selected_photo.original_path:
+            photo_path = selected_photo.original_path
+        else:
+            project_dir = str(Path(self._vm.project.path).parent) if self._vm.project and self._vm.project.path else ""
+            photo_path = str(Path(project_dir) / selected_photo.path) if project_dir else None
+        if photo_path:
+            self._annotation_panel.set_photo_thumbnail(photo_path)
+
+    @Slot(object)
+    def _on_photo_selection_changed(self, photo) -> None:
+        """Enable/disable Link Photo button based on photo selection."""
+        has_selection = photo is not None
+        has_annotation = self._annotation_vm.selected_annotation_id is not None
+        self._annotation_panel.set_link_photo_enabled(has_selection and has_annotation)
 
     @Slot(str)
     def _highlight_photo_for_annotation(self, annotation_id: str) -> None:
@@ -973,12 +1029,20 @@ class MainWindow(QMainWindow):
         format_str, orientation_str = dialog.get_selected_layout()
         page_size = dialog.get_page_size_string()
 
+        # Get project directory for resolving relative paths
+        # project.path is the .hpm file path; parent is the project directory
+        project_dir = str(Path(self._vm.project.path).parent) if self._vm.project and self._vm.project.path else ""
+        project_path = Path(project_dir) if project_dir else None
+
+        # Sort annotations by page_index for consistent page ordering
+        sorted_annotations = sorted(annotations, key=lambda a: (a.page_index, a.annotation_id))
+
         # Build pages_data from annotations
         pages_data = []
         plan_vm = self._plan_vm
         photo_vm = self._photo_vm
 
-        for ann in annotations:
+        for ann in sorted_annotations:
             # Find linked photo
             photo = None
             for p in photo_vm.photos:
@@ -987,19 +1051,28 @@ class MainWindow(QMainWindow):
                     break
 
             # Find plan page for calibration
+            # ann.page_index is the page index within the source PDF, not the position in sorted list
             plan_page = None
             if plan_vm.plan_model:
                 sorted_pages = plan_vm.plan_model.get_sorted_pages()
-                if 0 <= ann.page_index < len(sorted_pages):
-                    plan_page = sorted_pages[ann.page_index]
+                for p in sorted_pages:
+                    if p.page_index == ann.page_index:
+                        plan_page = p
+                        break
 
-            # Get calibration
+            # Get calibration and resolve plan_pdf_path to absolute
             pixels_per_meter = 100.0  # default
             plan_pdf_path = ""
             plan_page_index = 0
-            if plan_page and plan_page.calibration:
-                pixels_per_meter = plan_page.calibration.pixels_per_meter
-                plan_pdf_path = plan_page.source_path
+            if plan_page:
+                # Use calibration if available, otherwise use default
+                if plan_page.calibration:
+                    pixels_per_meter = plan_page.calibration.pixels_per_meter
+                # Resolve relative path to absolute
+                if project_path and plan_page.source_path:
+                    plan_pdf_path = str(project_path / plan_page.source_path)
+                else:
+                    plan_pdf_path = plan_page.source_path
                 plan_page_index = plan_page.page_index
 
             # Build metadata from photo EXIF
@@ -1016,10 +1089,17 @@ class MainWindow(QMainWindow):
                         "%Y-%m-%d %H:%M"
                     )
 
-            # Get photo path
-            photo_path = ann.photo_path
+            # Get photo path - resolve to absolute
+            photo_path = ""
             if photo and photo.original_path:
+                # original_path is already absolute
                 photo_path = photo.original_path
+            elif ann.photo_path:
+                # Resolve relative path to absolute
+                if project_path:
+                    photo_path = str(project_path / ann.photo_path)
+                else:
+                    photo_path = ann.photo_path
 
             pages_data.append(
                 ReportPageData(
@@ -1037,6 +1117,7 @@ class MainWindow(QMainWindow):
                     description=ann.description,
                     metadata=metadata,
                     floor=ann.floor,
+                    visible_area=ann.visible_area,
                 )
             )
 
