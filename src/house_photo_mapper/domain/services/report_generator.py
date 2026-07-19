@@ -1,11 +1,12 @@
 """ReportGeneratorService — PDF report composition using ReportLab canvas API.
 
 Creates professional PDF reports with one page per annotation containing:
-- Photo image (top 55% of page)
-- Figure number + title
+- Header with page title and annotation subtitle
+- Photo image (top portion)
 - Plan snippet (from PlanSnippet service)
 - Camera overlay (from CameraOverlay service)
-- Metadata footer (camera, lens, date)
+
+Supports Unicode text via NotoSans font.
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ from pathlib import Path
 from reportlab.lib.colors import HexColor, Color
 from reportlab.lib.pagesizes import A4, letter, landscape
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 from house_photo_mapper.domain.services.camera_overlay import CameraOverlay
@@ -30,6 +33,24 @@ PAGE_SIZES: dict[str, tuple[float, float]] = {
     "A4 Landscape": landscape(A4),
     "US Letter": letter,
 }
+
+# Font registration
+_FONTS_REGISTERED = False
+
+
+def _register_fonts() -> None:
+    """Register NotoSans fonts for Unicode text support."""
+    global _FONTS_REGISTERED
+    if _FONTS_REGISTERED:
+        return
+    font_dir = Path(__file__).parent.parent.parent / "fonts"
+    regular = font_dir / "NotoSans-Regular.ttf"
+    bold = font_dir / "NotoSans-Bold.ttf"
+    if regular.exists():
+        pdfmetrics.registerFont(TTFont("NotoSans", str(regular)))
+    if bold.exists():
+        pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(bold)))
+    _FONTS_REGISTERED = True
 
 
 @dataclass(frozen=True)
@@ -47,7 +68,8 @@ class ReportPageData:
         direction_angle: Viewing direction in degrees (0=right, CCW).
         cone_angle: Cone spread angle in degrees.
         color: Hex color string for overlay.
-        title: Annotation title.
+        title: Annotation title (used as subtitle in header).
+        page_title: Plan page title (used as header title).
         description: Free-text description.
         metadata: Dict with camera, lens, timestamp strings.
         floor: Floor number.
@@ -64,7 +86,8 @@ class ReportPageData:
     cone_angle: float
     color: str
     title: str
-    description: str
+    page_title: str = ""
+    description: str = ""
     metadata: dict[str, str] = field(default_factory=dict)
     floor: int = 0
     visible_area: list[list[float]] = field(default_factory=list)
@@ -74,8 +97,7 @@ class ReportGeneratorService:
     """Service for generating PDF reports with photos, plan snippets, and overlays.
 
     Uses ReportLab canvas API for fixed-page composition (not Platypus flowables).
-    Each page contains: photo, figure number + title, plan snippet, camera overlay,
-    and metadata footer.
+    Each page contains: header, photo, plan snippet with camera overlay.
     """
 
     def __init__(self, project_dir: str) -> None:
@@ -85,6 +107,7 @@ class ReportGeneratorService:
             project_dir: Path to the project root directory.
         """
         self.project_dir = Path(project_dir)
+        _register_fonts()
 
     def generate(
         self,
@@ -105,8 +128,8 @@ class ReportGeneratorService:
         pagesize = PAGE_SIZES.get(page_size, A4)
         c = canvas.Canvas(output_path, pagesize=pagesize)
 
-        for figure_num, page_data in enumerate(pages_data, start=1):
-            self._render_page(c, page_data, figure_num, pagesize)
+        for page_data in pages_data:
+            self._render_page(c, page_data, pagesize)
             c.showPage()
 
         c.save()
@@ -116,30 +139,48 @@ class ReportGeneratorService:
         self,
         c: canvas.Canvas,
         page_data: ReportPageData,
-        figure_num: int,
         page_size: tuple[float, float],
     ) -> None:
         """Render a single page of the report.
 
         Layout (from top to bottom):
-        - Top 55%: Photo with preserveAspectRatio
-        - Middle: Figure number + title
-        - Bottom: Plan snippet with camera overlay
-        - Footer: Metadata (camera, lens, date)
+        - Header: page title (bold) + annotation subtitle
+        - Photo with preserveAspectRatio
+        - Plan snippet with camera overlay
 
         Args:
             c: ReportLab canvas to draw on.
             page_data: Data for this page.
-            figure_num: Figure number (1-based).
             page_size: (width, height) in points.
         """
         width, height = page_size
         margin = 20 * 2.835  # 20mm in points
 
-        # --- Photo area: top 55% of usable area ---
-        usable_height = height - 2 * margin
-        photo_height = usable_height * 0.55
-        photo_top = height - margin
+        # --- Header ---
+        header_top = height - margin
+        header_height = 30
+
+        # Page title (bold)
+        page_title = page_data.page_title or "Untitled Page"
+        c.setFont("NotoSans-Bold", 14)
+        c.drawString(margin, header_top - 16, page_title)
+
+        # Annotation subtitle
+        annotation_title = page_data.title or "Untitled"
+        c.setFont("NotoSans", 10)
+        c.drawString(margin, header_top - 30, annotation_title)
+
+        # Separator line
+        separator_y = header_top - header_height - 5
+        c.setStrokeColorRGB(0.7, 0.7, 0.7)
+        c.setLineWidth(0.5)
+        c.line(margin, separator_y, width - margin, separator_y)
+
+        # --- Photo area: top 45% of remaining area ---
+        content_top = separator_y - 10
+        content_height = content_top - margin
+        photo_height = content_height * 0.45
+        photo_top = content_top
         photo_left = margin
         photo_width = width - 2 * margin
 
@@ -152,27 +193,20 @@ class ReportGeneratorService:
                 width=photo_width,
                 height=photo_height,
                 preserveAspectRatio=True,
-                anchor="nw",
+                anchor="n",
             )
         except Exception:
             # If photo fails to load, draw a placeholder rectangle
             c.setStrokeColorRGB(0.7, 0.7, 0.7)
             c.rect(photo_left, photo_top - photo_height, photo_width, photo_height)
 
-        # --- Figure number + title ---
-        figure_y = photo_top - photo_height - 20
-        c.setFont("Helvetica-Bold", 12)
-        figure_text = f"Figure {figure_num}: {page_data.title}"
-        c.drawString(margin, figure_y, figure_text)
-
         # --- Full plan page with annotation overlay ---
-        plan_top = figure_y - 20
-        plan_height = plan_top - margin - 30  # Leave room for metadata
+        plan_top = photo_top - photo_height - 10
+        plan_height = plan_top - margin
         plan_width = photo_width
 
         try:
             # Render full plan page at high resolution for print quality
-            # Use at least 1200px on the long side for ~600 DPI on A4
             plan_result = extract_full_plan_page(
                 pdf_path=page_data.plan_pdf_path,
                 page_index=page_data.plan_page_index,
@@ -195,11 +229,11 @@ class ReportGeneratorService:
                 anchor="nw",
             )
 
-            # Convert annotation scene coordinates (pixels at 150 DPI) to plan image pixels
+            # Convert annotation scene coordinates to plan image pixels
             anno_x_in_plan = (page_data.plan_center_x - plan_result.offset_x) * plan_result.scale_x
             anno_y_in_plan = (page_data.plan_center_y - plan_result.offset_y) * plan_result.scale_y
 
-            # Convert to PDF canvas coordinates (Y is flipped: PDF bottom=0, image top=0)
+            # Convert to PDF canvas coordinates (Y is flipped)
             canvas_x = plan_left + anno_x_in_plan
             canvas_y = plan_bottom + plan_height - anno_y_in_plan
 
@@ -213,17 +247,17 @@ class ReportGeneratorService:
             c.circle(canvas_x, canvas_y, 3, fill=1)
             c.restoreState()
 
-            # Draw direction arrow (flip Y for PDF canvas since scene coords are Y-down)
+            # Draw direction arrow
             c.saveState()
             rad = math.radians(page_data.direction_angle)
             dx = 10 * math.cos(rad)
-            dy = -10 * math.sin(rad)  # negate sin for Y-up canvas
+            dy = -10 * math.sin(rad)
             c.setStrokeColorRGB(r, g, b)
             c.setLineWidth(2)
             c.line(canvas_x, canvas_y, canvas_x + dx, canvas_y + dy)
             c.restoreState()
 
-            # Draw viewing cone (triangle) — flip Y for PDF canvas
+            # Draw viewing cone (triangle)
             cone_length = 20.0
             left, right = CameraOverlay.compute_cone_vertices(
                 canvas_x, canvas_y,
@@ -231,15 +265,14 @@ class ReportGeneratorService:
                 page_data.cone_angle,
                 cone_length,
             )
-            # Flip Y of cone vertices for PDF canvas
             left = (left[0], canvas_y - (left[1] - canvas_y))
             right = (right[0], canvas_y - (right[1] - canvas_y))
 
             c.saveState()
-            c.setFillColorRGB(r, g, b, 0.1)  # ~10% opacity
-            c.setStrokeColorRGB(r, g, b, 0.6)  # ~60% opacity
+            c.setFillColorRGB(r, g, b, 0.1)
+            c.setStrokeColorRGB(r, g, b, 0.6)
             c.setLineWidth(1)
-            c.setDash(3, 2)  # dashed line
+            c.setDash(3, 2)
             path = c.beginPath()
             path.moveTo(canvas_x, canvas_y)
             path.lineTo(*left)
@@ -253,17 +286,16 @@ class ReportGeneratorService:
                 rect_data = page_data.visible_area[0]
                 if len(rect_data) >= 4:
                     rx, ry, rw, rh = rect_data[0], rect_data[1], rect_data[2], rect_data[3]
-                    # Convert scene coords to plan area coords (same scale as marker)
                     rect_x = plan_left + (rx - plan_result.offset_x) * plan_result.scale_x
                     rect_y = plan_bottom + plan_height - ((ry - plan_result.offset_y) * plan_result.scale_y) - rh * plan_result.scale_y
                     rect_w = rw * plan_result.scale_x
                     rect_h = rh * plan_result.scale_y
 
                     c.saveState()
-                    c.setFillColorRGB(r, g, b, 0.12)  # ~12% opacity fill
-                    c.setStrokeColorRGB(r, g, b, 0.6)  # ~60% opacity stroke
+                    c.setFillColorRGB(r, g, b, 0.12)
+                    c.setStrokeColorRGB(r, g, b, 0.6)
                     c.setLineWidth(1.5)
-                    c.setDash(6, 3)  # dashed line
+                    c.setDash(6, 3)
                     c.rect(rect_x, rect_y, rect_w, rect_h, fill=1, stroke=1)
                     c.restoreState()
 
@@ -271,38 +303,3 @@ class ReportGeneratorService:
             # If plan fails, draw a placeholder
             c.setStrokeColorRGB(0.7, 0.7, 0.7)
             c.rect(margin, plan_top - plan_height, plan_width, plan_height)
-
-        # --- Metadata footer ---
-        metadata_y = margin + 5
-        c.setFont("Helvetica", 8)
-        metadata_str = self._build_metadata_string(page_data.metadata)
-        c.drawString(margin, metadata_y, metadata_str)
-
-    def _build_metadata_string(self, metadata: dict[str, str]) -> str:
-        """Format metadata dict to a display string.
-
-        Format: "Camera Make Model | Lens | YYYY-MM-DD HH:MM"
-
-        Args:
-            metadata: Dict with camera_make, camera_model, lens_model, timestamp.
-
-        Returns:
-            Formatted metadata string.
-        """
-        parts = []
-
-        camera_make = metadata.get("camera_make", "")
-        camera_model = metadata.get("camera_model", "")
-        if camera_make or camera_model:
-            camera_str = f"{camera_make} {camera_model}".strip()
-            parts.append(camera_str)
-
-        lens = metadata.get("lens_model", "")
-        if lens:
-            parts.append(lens)
-
-        timestamp = metadata.get("timestamp", "")
-        if timestamp:
-            parts.append(timestamp)
-
-        return " | ".join(parts) if parts else "No metadata"

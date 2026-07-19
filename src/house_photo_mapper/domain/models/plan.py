@@ -44,10 +44,12 @@ class PageModel(BaseModel):
     Attributes:
         source_path: Path to source file (PDF/PNG/JPG), relative to project directory.
         original_path: Original absolute path when imported.
-        page_index: Page index within source file (for multi-page PDFs).
+        page_index: Globally unique page index across all imported files.
+        source_page_index: Page index within the source document (for rendering).
         rotation: Page rotation in degrees (0, 90, 180, 270).
         floor: Floor number (-2 for basement, -1 for lower ground, 0 for ground, 1-10 for upper).
         order: Display order in page navigator (lower = first).
+        name: User-assigned page name. Empty string means auto-generated label.
         calibration: Optional per-page calibration. None if not yet calibrated.
     """
 
@@ -58,10 +60,12 @@ class PageModel(BaseModel):
 
     source_path: str = Field(description="Relative path to source file from project root")
     original_path: str = Field(default="", description="Original absolute path when imported")
-    page_index: int = Field(ge=0, description="Page index in source document")
+    page_index: int = Field(ge=0, description="Globally unique page index across all imported files")
+    source_page_index: int = Field(default=0, ge=0, description="Page index within the source document (for rendering)")
     rotation: int = Field(default=0, ge=0, le=270, description="Rotation in degrees (0, 90, 180, 270)")
     floor: int = Field(default=0, ge=-2, le=10, description="Floor number (-2 to 10)")
     order: int = Field(default=0, ge=0, description="Display order in navigator")
+    name: str = Field(default="", description="User-assigned page name (empty = auto-generated)")
     calibration: Optional[CalibrationModel] = Field(
         default=None, description="Per-page calibration in scene coordinates"
     )

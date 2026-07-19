@@ -50,18 +50,28 @@ class MainWindowViewModel(QtSafeViewModel):
             self.recent_projects_changed.emit
         )
 
-        # Auto-create a new untitled project on startup
-        self._auto_create_new_project()
+    def reopen_last_project(self) -> None:
+        """Reopen last opened project if it exists on disk, else create untitled.
 
-    def _auto_create_new_project(self) -> None:
-        """Auto-create a new untitled project on startup."""
-        import tempfile
-        import os
+        Must be called after all ViewModels are wired up (plan_vm, photo_vm, annotation_vm).
+        """
+        from house_photo_mapper.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
 
-        # Create a temporary untitled project
-        temp_dir = tempfile.gettempdir()
-        untitled_path = os.path.join(temp_dir, "Untitled.hpmpj")
-        self._project_vm.new_project(untitled_path)
+        last_path = self._persistence.get_last_opened_project()
+        logger.debug("reopen_last_project: last_path=%r", last_path)
+        if last_path and Path(last_path).is_file():
+            logger.info("Auto-reopening project: %s", last_path)
+            self._project_vm.open_project(last_path)
+        else:
+            logger.info("No last project found (path=%r, exists=%s), creating untitled",
+                        last_path, Path(last_path).is_file() if last_path else "N/A")
+            import tempfile
+            import os
+
+            temp_dir = tempfile.gettempdir()
+            untitled_path = os.path.join(temp_dir, "Untitled.hpmpj")
+            self._project_vm.new_project(untitled_path)
 
     @property
     def project_vm(self) -> ProjectViewModel:
@@ -171,11 +181,10 @@ class MainWindowViewModel(QtSafeViewModel):
 
     @Slot()
     def import_plan(self) -> None:
-        """Show Import Plan dialog and route to PlanViewModel by file type.
+        """Show Import Plan dialog and import one or more plan files.
 
-        Supports PDF, PNG, JPG, JPEG files. Works without a project loaded
-        (standalone import). Routes to load_plan_from_pdf or load_plan_from_image
-        based on file extension.
+        Supports PDF, PNG, JPG, JPEG files. Allows selecting multiple files.
+        New pages are appended to existing plan (if any) with sequential naming.
         """
         plan_vm = self.plan_vm
         if plan_vm is None:
@@ -183,25 +192,25 @@ class MainWindowViewModel(QtSafeViewModel):
             return
 
         directory = self._persistence.get_last_opened_directory()
-        path, _ = QFileDialog.getOpenFileName(
+        paths, _ = QFileDialog.getOpenFileNames(
             None,
             "Import Plan",
             directory,
             "Plans (*.pdf *.png *.jpg *.jpeg);;PDF Files (*.pdf);;Images (*.png *.jpg *.jpeg)",
         )
-        if not path:
+        if not paths:
             return
 
         try:
-            suffix = Path(path).suffix.lower()
-            if suffix == ".pdf":
-                plan_vm.load_plan_from_pdf(path)
-            elif suffix in (".png", ".jpg", ".jpeg"):
-                plan_vm.load_plan_from_image(path)
-            else:
-                self.status_message_changed.emit(f"Unsupported file type: {suffix}")
-                return
-            self._persistence.set_last_opened_directory(str(Path(path).parent))
+            # Calculate starting order from existing pages
+            start_order = 0
+            if plan_vm.plan_model is not None:
+                sorted_pages = plan_vm.plan_model.get_sorted_pages()
+                if sorted_pages:
+                    start_order = max(p.order for p in sorted_pages) + 1
+
+            plan_vm.import_plans(paths, start_order=start_order)
+            self._persistence.set_last_opened_directory(str(Path(paths[0]).parent))
 
             # Update ProjectViewModel's plan_model so it gets saved
             if plan_vm.plan_model is not None:

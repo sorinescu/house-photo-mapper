@@ -56,6 +56,19 @@ class AnnotationViewModel(QtSafeViewModel):
         """
         self._undo_stack = undo_stack
 
+    def clear(self) -> None:
+        """Clear all annotations and reset state for a new project."""
+        self._annotations.clear()
+        self._selected_annotation_id = None
+        self._pending_annotation = None
+        self._creation_step = 0
+        self._tool_state = ToolState.SELECT
+        self.tool_changed.emit("select")
+        self.annotation_deselected.emit()
+        self.annotations_changed.emit([])
+        if self._undo_stack is not None:
+            self._undo_stack.clear()
+
     @property
     def tool_state(self) -> ToolState:
         return self._tool_state
@@ -129,7 +142,9 @@ class AnnotationViewModel(QtSafeViewModel):
         self._pending_annotation = None
         self._creation_step = 0
         self.annotation_added.emit(annotation.annotation_id)
-        self.annotations_changed.emit([a.annotation_id for a in self.current_annotations])
+        # NOTE: Do NOT emit annotations_changed here. The view's _on_annotation_added
+        # already linked the pending group. Emitting annotations_changed would trigger
+        # _on_annotations_changed to create duplicate items in the scene.
 
     @Slot(float)
     def set_direction(self, angle: float) -> None:
@@ -203,7 +218,8 @@ class AnnotationViewModel(QtSafeViewModel):
         annotation = self._pending_annotation
         self._annotations[annotation.annotation_id] = annotation
         self.annotation_added.emit(annotation.annotation_id)
-        self.annotations_changed.emit([a.annotation_id for a in self.current_annotations])
+        # NOTE: Do NOT emit annotations_changed here — _on_annotation_added
+        # already linked the pending group. See place_marker for rationale.
 
         self._pending_annotation = None
         self._creation_step = 0
@@ -263,9 +279,9 @@ class AnnotationViewModel(QtSafeViewModel):
         self.annotation_removed.emit(annotation_id)
         self.annotations_changed.emit([a.annotation_id for a in self.current_annotations])
 
-    @Slot(str, str, str, str)
+    @Slot(str, str, str)
     def update_annotation_metadata(
-        self, annotation_id: str, title: str, description: str, tags_csv: str
+        self, annotation_id: str, title: str, description: str
     ) -> None:
         """Update metadata for an existing annotation.
 
@@ -273,7 +289,6 @@ class AnnotationViewModel(QtSafeViewModel):
             annotation_id: ID of annotation to update.
             title: New title (required).
             description: New description.
-            tags_csv: New comma-separated tags.
         """
         if annotation_id not in self._annotations:
             self.error_occurred.emit(f"Unknown annotation: {annotation_id}")
@@ -286,7 +301,6 @@ class AnnotationViewModel(QtSafeViewModel):
         annotation = self._annotations[annotation_id]
         annotation.title = title.strip()
         annotation.description = description.strip()
-        annotation.tags = [t.strip() for t in tags_csv.split(",") if t.strip()]
 
     @Slot(str, str)
     def update_annotation_color(self, annotation_id: str, color: str) -> None:

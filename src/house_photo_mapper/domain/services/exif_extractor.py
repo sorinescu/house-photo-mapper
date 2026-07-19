@@ -56,7 +56,7 @@ def extract_exif(path: Path) -> ExifModel:
     gps_lat = None
     gps_lon = None
     gps_info = tags.get("GPSInfo")
-    if gps_info:
+    if gps_info and isinstance(gps_info, dict):
         from PIL.ExifTags import GPSTAGS
 
         gps_tags = {GPSTAGS.get(k, k): v for k, v in gps_info.items()}

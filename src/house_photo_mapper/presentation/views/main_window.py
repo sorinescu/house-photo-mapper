@@ -22,12 +22,9 @@ from house_photo_mapper.domain.services.persistence import PersistenceService
 from house_photo_mapper.domain.services.photo_importer import SUPPORTED_FORMATS
 from house_photo_mapper.infrastructure.autosave import AutoSaveManager
 from house_photo_mapper.infrastructure.logging import get_logger
-from house_photo_mapper.infrastructure.platform import get_app_data_dir
-from house_photo_mapper.infrastructure.recovery import RecoveryScanner
 from house_photo_mapper.infrastructure.theme import ThemeManager, ThemeMode
 from house_photo_mapper.domain.services.report_generator import ReportGeneratorService, ReportPageData
 from house_photo_mapper.presentation.views.layout_dialog import LayoutDialog
-from house_photo_mapper.presentation.views.recovery_dialog import RecoveryDialog
 from house_photo_mapper.presentation.views.report_progress import ReportProgressDialog
 from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
@@ -134,9 +131,6 @@ class MainWindow(QMainWindow):
         # Start monitoring system theme changes
         self._theme_manager.start_monitoring_system_theme()
 
-        # Scan for crash recovery on startup
-        self._scan_for_recovery()
-
     def _restore_state(self) -> None:
         """Restore window geometry and state from QSettings."""
         geometry = self._persistence.load_window_geometry()
@@ -146,72 +140,6 @@ class MainWindow(QMainWindow):
         state = self._persistence.load_window_state()
         if state:
             self.restoreState(state)
-
-    def _scan_for_recovery(self) -> None:
-        """Scan for .bak files and show recovery dialog if found."""
-        logger = get_logger(__name__)
-
-        try:
-            scanner = RecoveryScanner(
-                app_data_dir=get_app_data_dir(),
-                recent_projects=self._persistence.get_recent_projects(),
-            )
-
-            # Clean up old backups first
-            scanner.cleanup_old_backups()
-
-            # Scan for recoverable projects
-            recoverable = scanner.scan_for_recoverable()
-
-            if not recoverable:
-                logger.debug("No recoverable projects found")
-                return
-
-            logger.info("Found %d recoverable project(s)", len(recoverable))
-
-            # Show recovery dialog
-            dialog = RecoveryDialog(recoverable, parent=self)
-            dialog.recovery_selected.connect(self._on_recovery_selected)
-            result = dialog.exec()
-
-            # If user dismissed, delete the .bak files so they don't reappear
-            from PySide6.QtWidgets import QDialog
-            if result == QDialog.DialogCode.Rejected:
-                for project in recoverable:
-                    try:
-                        project.bak_path.unlink(missing_ok=True)
-                        logger.info("Deleted dismissed .bak: %s", project.bak_path)
-                    except OSError as e:
-                        logger.warning("Failed to delete .bak %s: %s", project.bak_path, e)
-
-        except Exception as e:
-            logger.warning("Recovery scan failed: %s", e)
-            # Don't block startup on recovery scan failure
-
-    @Slot(list)
-    def _on_recovery_selected(self, bak_paths: list) -> None:
-        """Handle recovery selection from dialog.
-
-        Args:
-            bak_paths: List of .bak file paths to recover.
-        """
-        logger = get_logger(__name__)
-
-        for bak_path in bak_paths:
-            try:
-                project = self._persistence.recover_project(str(bak_path))
-                # Open the recovered project
-                self._vm.project_vm.load_project(project)
-                logger.info("Recovered project: %s", project.project_name)
-                # Only recover the first one
-                break
-            except Exception as e:
-                logger.error("Failed to recover %s: %s", bak_path, e)
-                QMessageBox.warning(
-                    self,
-                    "Recovery Failed",
-                    f"Failed to recover project:\n{e}",
-                )
 
     def _setup_ui(self) -> None:
         """Set up menus, toolbars, status bar, and central widget."""
@@ -375,8 +303,45 @@ class MainWindow(QMainWindow):
         paste_action.setEnabled(False)
         menu.addAction(paste_action)
 
+        menu.addSeparator()
+
+        self._delete_page_action = QAction("&Delete Page", self)
+        self._delete_page_action.setShortcut(QKeySequence("Ctrl+Backspace"))
+        self._delete_page_action.setStatusTip("Delete the current plan page")
+        self._delete_page_action.triggered.connect(self._delete_current_page)
+        self._delete_page_action.setEnabled(False)
+        menu.addAction(self._delete_page_action)
+
+        self._delete_photo_action = QAction("Delete &Photo", self)
+        self._delete_photo_action.setShortcut(QKeySequence.StandardKey.Delete)
+        self._delete_photo_action.setStatusTip("Delete the selected photo from the project")
+        self._delete_photo_action.triggered.connect(self._photo_vm.remove_selected)
+        self._delete_photo_action.setEnabled(False)
+        menu.addAction(self._delete_photo_action)
+
     def _add_view_actions(self, menu: QMenu) -> None:
         """Add actions to View menu."""
+        # Zoom actions
+        zoom_in_action = QAction("Zoom &In", self)
+        zoom_in_action.setShortcut(QKeySequence.StandardKey.ZoomIn)
+        zoom_in_action.setStatusTip("Zoom in on the plan")
+        zoom_in_action.triggered.connect(self._plan_vm.zoom_in)
+        menu.addAction(zoom_in_action)
+
+        zoom_out_action = QAction("Zoom &Out", self)
+        zoom_out_action.setShortcut(QKeySequence.StandardKey.ZoomOut)
+        zoom_out_action.setStatusTip("Zoom out on the plan")
+        zoom_out_action.triggered.connect(self._plan_vm.zoom_out)
+        menu.addAction(zoom_out_action)
+
+        fit_action = QAction("&Fit to Window", self)
+        fit_action.setShortcut(QKeySequence("Ctrl+0"))
+        fit_action.setStatusTip("Fit the plan to the viewport")
+        fit_action.triggered.connect(self._plan_vm.fit_to_window)
+        menu.addAction(fit_action)
+
+        menu.addSeparator()
+
         toolbar_action = QAction("&Toolbar", self)
         toolbar_action.setCheckable(True)
         toolbar_action.setChecked(True)
@@ -523,6 +488,9 @@ class MainWindow(QMainWindow):
         # Wire PlanView to AnnotationViewModel for mouse events
         self._plan_view.set_annotation_vm(self._annotation_vm)
 
+        # Connect PlanGraphicsView project_modified to mark dirty
+        self._plan_view._view.project_modified.connect(self._vm.project_vm.mark_dirty)
+
         # Create photo browser and metadata panel
         self._photo_browser = PhotoBrowser()
         self._photo_metadata = PhotoMetadataPanel()
@@ -549,11 +517,13 @@ class MainWindow(QMainWindow):
 
         # Connect sidebar signals to PlanViewModel
         self._sidebar.order_changed.connect(self._plan_vm.on_sidebar_order_changed)
-        self._sidebar.floor_changed.connect(self._plan_vm.on_sidebar_floor_changed)
         self._sidebar.itemClicked.connect(self._on_sidebar_item_clicked)
+        self._sidebar.page_deleted.connect(self._on_page_deleted)
+        self._sidebar.page_name_changed.connect(self._on_page_name_changed)
 
         # Connect PlanViewModel signals to sidebar
         self._plan_vm.pages_changed.connect(self._on_pages_changed)
+        self._plan_vm.pages_reordered.connect(self._on_pages_reordered)
         self._plan_vm.pixmap_ready.connect(self._on_pixmap_ready)
         self._plan_vm.thumbnail_ready.connect(self._on_plan_thumbnail_ready)
 
@@ -565,7 +535,9 @@ class MainWindow(QMainWindow):
         self._photo_vm.thumbnail_ready.connect(self._photo_browser.update_thumbnail)
         self._photo_vm.duplicates_found.connect(self._on_duplicates_found)
         self._photo_vm.metadata_changed.connect(self._photo_metadata.update_metadata)
+        self._photo_vm.photo_removed.connect(self._photo_browser.remove_photo)
         self._photo_browser.itemClicked.connect(self._on_photo_clicked)
+        self._photo_browser.delete_selected.connect(self._photo_vm.remove_selected)
 
         # Connect photos_cleared signal to clear photo browser
         self._vm.project_vm.photos_cleared.connect(self._on_photos_cleared)
@@ -576,7 +548,7 @@ class MainWindow(QMainWindow):
         self._annotation_vm.annotation_deselected.connect(self._on_annotation_deselected)
         self._annotation_vm.annotation_added.connect(self._on_annotation_added)
         self._annotation_vm.annotation_removed.connect(self._on_annotation_removed)
-        self._annotation_panel.save_requested.connect(self._annotation_vm.update_annotation_metadata)
+        self._annotation_panel.metadata_changed.connect(self._on_annotation_metadata_changed)
         self._annotation_panel.color_changed.connect(self._on_annotation_color_changed)
         self._annotation_panel.link_photo_requested.connect(self._on_link_photo_requested)
 
@@ -595,10 +567,12 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _on_dirty_changed(self, dirty: bool) -> None:
-        """Start auto-save timer when project becomes dirty."""
+        """Trigger immediate save when project becomes dirty."""
+        log = get_logger(__name__)
+        log.debug("_on_dirty_changed: dirty=%s, project=%s", dirty, 
+                  self._vm.project_vm.project.path if self._vm.project_vm.project else None)
         if dirty and self._vm.project_vm.project is not None:
-            if not self._autosave.is_saving:
-                self._autosave.start()
+            self._autosave.save_now()
 
     @Slot(object)
     def _on_project_changed(self, project_vm: "ProjectViewModel") -> None:
@@ -697,6 +671,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Save project if dirty, then save window state and exit."""
+        logger = get_logger(__name__)
+
         # Cancel pending auto-save
         self._autosave.cancel_pending()
 
@@ -705,6 +681,10 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage("Saving project...")
             self._vm.save_project()
             self._status_bar.showMessage("Project saved.", 2000)
+        elif self._vm.project_vm and self._vm.project_vm.project and self._vm.project_vm.project.path:
+            # Ensure last opened project is persisted even if not dirty
+            logger.debug("closeEvent: project not dirty, persisting last_opened_project=%s", self._vm.project_vm.project.path)
+            self._persistence.set_last_opened_project(self._vm.project_vm.project.path)
 
         # Save window geometry and state
         self._persistence.save_window_geometry(bytes(self.saveGeometry().data()))
@@ -794,17 +774,85 @@ class MainWindow(QMainWindow):
         
         # Update UI preferences
         self._vm.project_vm.project.ui_preferences.theme = self._theme_manager.get_current_mode().value
-        self._vm.project_vm.project.mark_dirty()
+        self._vm.project_vm.mark_dirty()
 
     def _on_sidebar_item_clicked(self, item) -> None:
         """Handle sidebar item click - switch active page."""
-        data = item.data(Qt.ItemDataRole.UserRole)
-        if data:
-            self._plan_vm.on_sidebar_page_clicked(data["page_num"])
+        page_num = item.data(Qt.ItemDataRole.UserRole)
+        if page_num is not None:
+            self._plan_vm.on_sidebar_page_clicked(page_num)
+
+    def _delete_current_page(self) -> None:
+        """Delete the currently active plan page after confirmation."""
+        sorted_pages = self._plan_vm.get_sorted_pages()
+        if not sorted_pages:
+            return
+
+        active_idx = self._plan_vm.current_page
+        if active_idx < 0 or active_idx >= len(sorted_pages):
+            return
+
+        page = sorted_pages[active_idx]
+        page_name = page.name if page.name else f"Page {page.page_index + 1}"
+
+        reply = QMessageBox.question(
+            self,
+            "Delete Page",
+            f"Delete '{page_name}'?\n\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self._plan_vm.delete_page(page.page_index)
+
+    @Slot(int)
+    def _on_page_deleted(self, page_num: int) -> None:
+        """Handle page delete request from sidebar context menu."""
+        sorted_pages = self._plan_vm.get_sorted_pages()
+        if not sorted_pages:
+            return
+
+        # Find page info for confirmation
+        page = None
+        for p in sorted_pages:
+            if p.page_index == page_num:
+                page = p
+                break
+
+        if page is None:
+            return
+
+        page_name = page.name if page.name else f"Page {page.page_index + 1}"
+
+        reply = QMessageBox.question(
+            self,
+            "Delete Page",
+            f"Delete '{page_name}'?\n\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self._plan_vm.delete_page(page_num)
+            self._vm.project_vm.mark_dirty()
+
+    @Slot(int, str)
+    def _on_page_name_changed(self, page_num: int, name: str) -> None:
+        """Handle page rename from sidebar and mark project dirty."""
+        self._plan_vm.rename_page(page_num, name)
+        self._vm.project_vm.mark_dirty()
+
+    @Slot(list)
+    def _on_pages_reordered(self, pages: list) -> None:
+        """Handle pages_reordered signal - mark project dirty (sidebar already updated by drag)."""
+        self._vm.project_vm.mark_dirty()
 
     def _on_pages_changed(self, pages: list) -> None:
         """Handle PlanViewModel.pages_changed signal - populate sidebar."""
         self._sidebar.clear()
+        has_pages = len(pages) > 0
+        self._delete_page_action.setEnabled(has_pages)
         for page in pages:
             # Create a placeholder pixmap for the thumbnail
             from PySide6.QtGui import QPixmap
@@ -813,40 +861,23 @@ class MainWindow(QMainWindow):
             self._sidebar.add_page(
                 page.page_index,
                 placeholder,
-                page.floor,
+                name=page.name,
             )
 
     def _on_pixmap_ready(self, pixmap) -> None:
         """Handle PlanViewModel.pixmap_ready signal - update sidebar thumbnail."""
-        # Update the active page's thumbnail in the sidebar
         sorted_pages = self._plan_vm.get_sorted_pages()
         if not sorted_pages:
             return
         active_idx = self._plan_vm.current_page
         if 0 <= active_idx < len(sorted_pages):
             page = sorted_pages[active_idx]
-            # Find existing item and update its icon instead of adding new
-            for i in range(self._sidebar.count()):
-                item = self._sidebar.item(i)
-                data = item.data(Qt.ItemDataRole.UserRole)
-                if data and data["page_num"] == page.page_index:
-                    scaled_pixmap = pixmap.scaled(
-                        120, 120,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
-                    )
-                    item.setIcon(QIcon(scaled_pixmap))
-                    break
+            self._sidebar.update_page_thumbnail(page.page_index, pixmap)
 
     @Slot(int, object)
     def _on_plan_thumbnail_ready(self, page_index: int, pixmap) -> None:
         """Handle PlanViewModel.thumbnail_ready signal - update sidebar thumbnail."""
-        for i in range(self._sidebar.count()):
-            item = self._sidebar.item(i)
-            data = item.data(Qt.ItemDataRole.UserRole)
-            if data and data["page_num"] == page_index:
-                item.setIcon(QIcon(pixmap))
-                break
+        self._sidebar.update_page_thumbnail(page_index, pixmap)
 
     @Slot()
     def _on_plan_cleared(self) -> None:
@@ -904,7 +935,7 @@ class MainWindow(QMainWindow):
                                 photo_path = str(Path(project_dir) / ann.photo_path)
                         break
             self._annotation_panel.show_annotation(
-                ann.annotation_id, ann.title, ann.description, ann.tags, ann.color,
+                ann.annotation_id, ann.title, ann.description, ann.color,
                 photo_path=photo_path,
             )
             self._delete_action.setEnabled(True)
@@ -917,12 +948,18 @@ class MainWindow(QMainWindow):
         """Handle annotation deselection - hide properties panel."""
         self._annotation_panel.clear()
         self._delete_action.setEnabled(False)
-        self._annotation_panel.set_link_photo_enabled(False)
+
+    @Slot(str, str, str)
+    def _on_annotation_metadata_changed(self, annotation_id: str, title: str, description: str) -> None:
+        """Handle annotation metadata change - update data model."""
+        self._annotation_vm.update_annotation_metadata(annotation_id, title, description)
+        self._vm.project_vm.mark_dirty()
 
     @Slot(str)
     def _on_annotation_added(self, annotation_id: str) -> None:
         """Handle new annotation added - link to selected photo if any."""
         self._annotation_vm.select_annotation(annotation_id)
+        self._vm.project_vm.mark_dirty()
         # Link annotation to currently selected photo
         selected_photo = self._photo_vm.selected_photo
         if selected_photo:
@@ -941,11 +978,13 @@ class MainWindow(QMainWindow):
                 break
         self._annotation_panel.clear()
         self._delete_action.setEnabled(False)
+        self._vm.project_vm.mark_dirty()
 
     @Slot(str, str)
     def _on_annotation_color_changed(self, annotation_id: str, color: str) -> None:
         """Handle annotation color change - update data model and graphics."""
         self._annotation_vm.update_annotation_color(annotation_id, color)
+        self._vm.project_vm.mark_dirty()
         # Update the graphics group color
         plan_view = self._plan_view
         if hasattr(plan_view, '_view') and hasattr(plan_view._view, '_annotation_groups'):
@@ -971,6 +1010,7 @@ class MainWindow(QMainWindow):
         # Link new photo
         ann.photo_path = selected_photo.path
         selected_photo.annotation_id = annotation_id
+        self._vm.project_vm.mark_dirty()
         # Update thumbnail in panel - use original_path for external imports
         if selected_photo.original_path:
             photo_path = selected_photo.original_path
@@ -982,10 +1022,11 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_photo_selection_changed(self, photo) -> None:
-        """Enable/disable Link Photo button based on photo selection."""
+        """Enable/disable buttons based on photo selection."""
         has_selection = photo is not None
         has_annotation = self._annotation_vm.selected_annotation_id is not None
         self._annotation_panel.set_link_photo_enabled(has_selection and has_annotation)
+        self._delete_photo_action.setEnabled(has_selection)
 
     @Slot(str)
     def _highlight_photo_for_annotation(self, annotation_id: str) -> None:
@@ -1034,13 +1075,24 @@ class MainWindow(QMainWindow):
         project_dir = str(Path(self._vm.project.path).parent) if self._vm.project and self._vm.project.path else ""
         project_path = Path(project_dir) if project_dir else None
 
-        # Sort annotations by page_index for consistent page ordering
-        sorted_annotations = sorted(annotations, key=lambda a: (a.page_index, a.annotation_id))
+        # Build plan page lookup: page_index → PageModel
+        plan_vm = self._plan_vm
+        photo_vm = self._photo_vm
+        page_by_index = {}
+        if plan_vm.plan_model:
+            for p in plan_vm.plan_model.get_sorted_pages():
+                page_by_index[p.page_index] = p
+
+        # Sort annotations by Page name → Annotation title
+        def _sort_key(a):
+            plan_page = page_by_index.get(a.page_index)
+            page_name = plan_page.name if plan_page else ""
+            return (page_name.lower(), (a.title or "").lower())
+
+        sorted_annotations = sorted(annotations, key=_sort_key)
 
         # Build pages_data from annotations
         pages_data = []
-        plan_vm = self._plan_vm
-        photo_vm = self._photo_vm
 
         for ann in sorted_annotations:
             # Find linked photo
@@ -1051,14 +1103,7 @@ class MainWindow(QMainWindow):
                     break
 
             # Find plan page for calibration
-            # ann.page_index is the page index within the source PDF, not the position in sorted list
-            plan_page = None
-            if plan_vm.plan_model:
-                sorted_pages = plan_vm.plan_model.get_sorted_pages()
-                for p in sorted_pages:
-                    if p.page_index == ann.page_index:
-                        plan_page = p
-                        break
+            plan_page = page_by_index.get(ann.page_index)
 
             # Get calibration and resolve plan_pdf_path to absolute
             pixels_per_meter = 100.0  # default
@@ -1068,12 +1113,14 @@ class MainWindow(QMainWindow):
                 # Use calibration if available, otherwise use default
                 if plan_page.calibration:
                     pixels_per_meter = plan_page.calibration.pixels_per_meter
-                # Resolve relative path to absolute
-                if project_path and plan_page.source_path:
+                # Prefer original_path (absolute) over source_path (filename only)
+                if plan_page.original_path:
+                    plan_pdf_path = plan_page.original_path
+                elif project_path and plan_page.source_path:
                     plan_pdf_path = str(project_path / plan_page.source_path)
                 else:
                     plan_pdf_path = plan_page.source_path
-                plan_page_index = plan_page.page_index
+                plan_page_index = plan_page.source_page_index
 
             # Build metadata from photo EXIF
             metadata = {}
@@ -1101,6 +1148,14 @@ class MainWindow(QMainWindow):
                 else:
                     photo_path = ann.photo_path
 
+            # Page title: use plan page name, fallback to source filename
+            page_title = ""
+            if plan_page:
+                if plan_page.name:
+                    page_title = plan_page.name
+                elif plan_page.source_path:
+                    page_title = Path(plan_page.source_path).stem
+
             pages_data.append(
                 ReportPageData(
                     annotation_id=ann.annotation_id,
@@ -1114,6 +1169,7 @@ class MainWindow(QMainWindow):
                     cone_angle=ann.cone_angle,
                     color=ann.color,
                     title=ann.title or "Untitled",
+                    page_title=page_title,
                     description=ann.description,
                     metadata=metadata,
                     floor=ann.floor,
@@ -1185,6 +1241,9 @@ class MainWindow(QMainWindow):
             event.accept()
         elif event.key() == Qt.Key.Key_Delete:
             self._delete_selected_annotation()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Backspace and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self._delete_current_page()
             event.accept()
         else:
             super().keyPressEvent(event)

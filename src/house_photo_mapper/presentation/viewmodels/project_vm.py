@@ -86,7 +86,7 @@ class ProjectViewModel(QtSafeViewModel):
             self._project = ProjectModel.create_empty(project_path)
             self._dirty = True
 
-            # Clear photos and plan for new project
+            # Clear photos, plan, and annotations for new project
             if self._photo_vm is not None:
                 self._photo_vm._photos.clear()
                 self._photo_vm._thumbnail_generator.clear()
@@ -95,6 +95,8 @@ class ProjectViewModel(QtSafeViewModel):
             if self._plan_vm is not None:
                 self._plan_vm.plan_model = PlanModel()
                 self.plan_cleared.emit()
+            if self._annotation_vm is not None:
+                self._annotation_vm.clear()
 
             self._emit_project_changed()
             self._emit_dirty_changed()
@@ -111,6 +113,9 @@ class ProjectViewModel(QtSafeViewModel):
         Args:
             path: File path to the .hpmpj project file.
         """
+        from house_photo_mapper.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
+        logger.debug("open_project: %s", path)
         try:
             self._project = self._persistence.load_project(path)
             self._dirty = False
@@ -141,6 +146,10 @@ class ProjectViewModel(QtSafeViewModel):
                             full_path = str(project_dir / photo.path)
                         self._photo_vm._thumbnail_generator.generate(photo.path, full_path)
 
+            # Clear old annotations before loading new ones
+            if self._annotation_vm is not None:
+                self._annotation_vm.clear()
+
             # Load annotations from ProjectModel
             if self._annotation_vm is not None and self._project.annotations:
                 from house_photo_mapper.domain.models.annotation import AnnotationModel
@@ -161,6 +170,9 @@ class ProjectViewModel(QtSafeViewModel):
     @Slot()
     def save_project(self) -> None:
         """Save the current project to its existing path."""
+        from house_photo_mapper.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
+
         if self._project is None:
             self.error_occurred.emit("No project to save")
             return
@@ -169,6 +181,7 @@ class ProjectViewModel(QtSafeViewModel):
             self.error_occurred.emit("Project has no path; use Save As")
             return
 
+        logger.debug("save_project: path=%s", self._project.path)
         try:
             # Serialize annotations from AnnotationViewModel into ProjectModel
             if self._annotation_vm is not None:

@@ -19,6 +19,9 @@ class TestMainWindowViewModelImportPlan:
         mock_persistence.get_last_opened_directory.return_value = "/tmp"
         mock_project_vm = MagicMock()
         mock_plan_vm = MagicMock()
+        # Configure plan_model mock for import_plans start_order calculation
+        mock_plan_vm.plan_model = MagicMock()
+        mock_plan_vm.plan_model.get_sorted_pages.return_value = []
 
         vm = MainWindowViewModel(mock_persistence)
         vm._project_vm = mock_project_vm
@@ -37,69 +40,113 @@ class TestMainWindowViewModelImportPlan:
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("", "")
+            mock_dialog.getOpenFileNames.return_value = ([], "")
             vm.import_plan()
-            args = mock_dialog.getOpenFileName.call_args
+            args = mock_dialog.getOpenFileNames.call_args
             filter_arg = args[0][3] if len(args[0]) > 3 else args[1].get("filter", "")
             assert "pdf" in filter_arg.lower()
             assert "png" in filter_arg.lower()
             assert "jpg" in filter_arg.lower()
 
-    def test_import_plan_routes_pdf_to_load_plan_from_pdf(self):
-        """When user selects a .pdf file, import_plan calls load_plan_from_pdf."""
+    def test_import_plan_routes_pdf_to_import_plans(self):
+        """When user selects a .pdf file, import_plan calls import_plans."""
         vm, _, mock_plan_vm, _ = self._make_vm()
 
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/plan.pdf", "")
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan.pdf"], "")
             vm.import_plan()
-            mock_plan_vm.load_plan_from_pdf.assert_called_once_with("/tmp/plan.pdf")
+            mock_plan_vm.import_plans.assert_called_once_with(
+                ["/tmp/plan.pdf"], start_order=0
+            )
 
-    def test_import_plan_routes_png_to_load_plan_from_image(self):
-        """When user selects a .png file, import_plan calls load_plan_from_image."""
+    def test_import_plan_routes_png_to_import_plans(self):
+        """When user selects a .png file, import_plan calls import_plans."""
         vm, _, mock_plan_vm, _ = self._make_vm()
 
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/plan.png", "")
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan.png"], "")
             vm.import_plan()
-            mock_plan_vm.load_plan_from_image.assert_called_once_with("/tmp/plan.png")
+            mock_plan_vm.import_plans.assert_called_once_with(
+                ["/tmp/plan.png"], start_order=0
+            )
 
-    def test_import_plan_routes_jpg_to_load_plan_from_image(self):
-        """When user selects a .jpg file, import_plan calls load_plan_from_image."""
+    def test_import_plan_routes_jpg_to_import_plans(self):
+        """When user selects a .jpg file, import_plan calls import_plans."""
         vm, _, mock_plan_vm, _ = self._make_vm()
 
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/plan.jpg", "")
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan.jpg"], "")
             vm.import_plan()
-            mock_plan_vm.load_plan_from_image.assert_called_once_with("/tmp/plan.jpg")
+            mock_plan_vm.import_plans.assert_called_once_with(
+                ["/tmp/plan.jpg"], start_order=0
+            )
 
-    def test_import_plan_routes_jpeg_to_load_plan_from_image(self):
-        """When user selects a .jpeg file, import_plan calls load_plan_from_image."""
+    def test_import_plan_routes_jpeg_to_import_plans(self):
+        """When user selects a .jpeg file, import_plan calls import_plans."""
         vm, _, mock_plan_vm, _ = self._make_vm()
 
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/plan.jpeg", "")
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan.jpeg"], "")
             vm.import_plan()
-            mock_plan_vm.load_plan_from_image.assert_called_once_with("/tmp/plan.jpeg")
+            mock_plan_vm.import_plans.assert_called_once_with(
+                ["/tmp/plan.jpeg"], start_order=0
+            )
 
     def test_import_plan_cancel_does_nothing(self):
-        """When user cancels the dialog (empty path), no load method is called."""
+        """When user cancels the dialog (empty list), no load method is called."""
         vm, _, mock_plan_vm, _ = self._make_vm()
 
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("", "")
+            mock_dialog.getOpenFileNames.return_value = ([], "")
             vm.import_plan()
-            mock_plan_vm.load_plan_from_pdf.assert_not_called()
-            mock_plan_vm.load_plan_from_image.assert_not_called()
+            mock_plan_vm.import_plans.assert_not_called()
+
+    def test_import_plan_multiple_files(self):
+        """import_plan can handle multiple selected files."""
+        vm, _, mock_plan_vm, _ = self._make_vm()
+
+        with patch(
+            "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
+        ) as mock_dialog:
+            mock_dialog.getOpenFileNames.return_value = (
+                ["/tmp/plan1.pdf", "/tmp/plan2.pdf"],
+                "",
+            )
+            vm.import_plan()
+            mock_plan_vm.import_plans.assert_called_once_with(
+                ["/tmp/plan1.pdf", "/tmp/plan2.pdf"], start_order=0
+            )
+
+    def test_import_plan_appends_to_existing_pages(self):
+        """import_plan calculates start_order from existing pages."""
+        vm, _, mock_plan_vm, _ = self._make_vm()
+
+        # Simulate existing pages with orders 0 and 1
+        mock_page_0 = MagicMock()
+        mock_page_0.order = 0
+        mock_page_1 = MagicMock()
+        mock_page_1.order = 1
+        mock_plan_vm.plan_model = MagicMock()
+        mock_plan_vm.plan_model.get_sorted_pages.return_value = [mock_page_0, mock_page_1]
+
+        with patch(
+            "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
+        ) as mock_dialog:
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan3.pdf"], "")
+            vm.import_plan()
+            mock_plan_vm.import_plans.assert_called_once_with(
+                ["/tmp/plan3.pdf"], start_order=2
+            )
 
     def test_import_plan_works_without_project(self):
         """import_plan works without a project loaded (standalone import)."""
@@ -109,14 +156,14 @@ class TestMainWindowViewModelImportPlan:
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/plan.pdf", "")
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan.pdf"], "")
             vm.import_plan()
-            mock_plan_vm.load_plan_from_pdf.assert_called_once()
+            mock_plan_vm.import_plans.assert_called_once()
 
     def test_import_plan_error_emits_status_message(self):
-        """error_occurred signal emits message if load_plan_from_pdf raises exception."""
+        """error_occurred signal emits message if import_plans raises exception."""
         vm, _, mock_plan_vm, _ = self._make_vm()
-        mock_plan_vm.load_plan_from_pdf.side_effect = RuntimeError("bad file")
+        mock_plan_vm.import_plans.side_effect = RuntimeError("bad file")
 
         received = []
         vm.status_message_changed.connect(lambda msg: received.append(msg))
@@ -124,7 +171,7 @@ class TestMainWindowViewModelImportPlan:
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/plan.pdf", "")
+            mock_dialog.getOpenFileNames.return_value = (["/tmp/plan.pdf"], "")
             vm.import_plan()
             assert len(received) == 1
             assert "Failed to import plan" in received[0]
@@ -136,7 +183,10 @@ class TestMainWindowViewModelImportPlan:
         with patch(
             "house_photo_mapper.presentation.viewmodels.main_window_vm.QFileDialog"
         ) as mock_dialog:
-            mock_dialog.getOpenFileName.return_value = ("/tmp/subdir/plan.pdf", "")
+            mock_dialog.getOpenFileNames.return_value = (
+                ["/tmp/subdir/plan.pdf"],
+                "",
+            )
             vm.import_plan()
             mock_persistence.set_last_opened_directory.assert_called_with("/tmp/subdir")
 

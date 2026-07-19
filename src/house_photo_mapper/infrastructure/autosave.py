@@ -160,6 +160,19 @@ class AutoSaveManager(QObject):
         """Trigger an immediate save if project is dirty and not already saving."""
         self._perform_save()
 
+    def save_now(self) -> None:
+        """Trigger an immediate save if project has a path and not already saving."""
+        if self._is_saving:
+            logger.debug("save_now: skipped, already saving")
+            return
+        if self._project_vm.project is None or not self._project_vm.project.path:
+            logger.debug("save_now: skipped, no project or no path (project=%s, path=%r)",
+                         self._project_vm.project, 
+                         self._project_vm.project.path if self._project_vm.project else None)
+            return
+        logger.debug("save_now: triggering save for %s", self._project_vm.project.path)
+        self._perform_save()
+
     def cancel_pending(self) -> None:
         """Cancel any pending save and stop the timer."""
         self._timer.stop()

@@ -1,8 +1,8 @@
 """PhotoBrowser - Widget for browsing photos with thumbnails."""
 
-from PySide6.QtCore import QSize, Qt, Slot
+from PySide6.QtCore import QSize, Qt, Signal, Slot
 from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QWidget
+from PySide6.QtWidgets import QMenu, QListWidget, QListWidgetItem, QWidget
 
 
 class PhotoBrowser(QListWidget):
@@ -11,6 +11,8 @@ class PhotoBrowser(QListWidget):
     Displays photos in a grid with thumbnails. Supports duplicate badges
     and lazy thumbnail generation for visible items.
     """
+
+    delete_selected = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Initialize PhotoBrowser.
@@ -27,6 +29,8 @@ class PhotoBrowser(QListWidget):
         self.setGridSize(QSize(220, 240))
         self.setWrapping(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
 
     @Slot(str, QPixmap)
     def add_photo(self, path: str, thumbnail: QPixmap | None = None) -> None:
@@ -95,3 +99,15 @@ class PhotoBrowser(QListWidget):
     def clear(self) -> None:
         """Clear all photos from the browser."""
         super().clear()
+
+    def _show_context_menu(self, pos) -> None:
+        """Show right-click context menu for photo items."""
+        item = self.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete Photo")
+        delete_action.setShortcut(Qt.Key.Key_Delete)
+        action = menu.exec(self.mapToGlobal(pos))
+        if action == delete_action:
+            self.delete_selected.emit()

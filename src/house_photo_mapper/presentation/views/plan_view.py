@@ -42,6 +42,7 @@ class PlanView(QWidget):
         # Create scene and view
         self._scene = PlanGraphicsScene(self)
         self._view = PlanGraphicsView(self._scene, self)
+        self._view.set_plan_vm(plan_vm)
 
         # Layout
         layout = QVBoxLayout(self)
@@ -76,7 +77,7 @@ class PlanView(QWidget):
         # Set scene rect to pixmap bounds
         self._scene.setSceneRect(QRectF(pixmap.rect()))
 
-        # Fit to view on first pixmap
+        # Fit to view on first pixmap only; preserve zoom on page switches
         if not self._initial_fit_done:
             self._view.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
             self._initial_fit_done = True
@@ -85,15 +86,18 @@ class PlanView(QWidget):
         """Handle zoom change from ViewModel.
 
         Args:
-            factor: New zoom factor.
+            factor: New zoom factor. 0.0 = fit to window.
         """
-        # Reset transform and apply new scale
-        self._view.resetTransform()
-        self._view.scale(factor, factor)
-
-        # Re-apply rotation if any
-        if self._plan_vm.rotation != 0:
-            self._view.rotate(self._plan_vm.rotation)
+        if factor == 0.0:
+            # Fit to window
+            self._view.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        else:
+            # Reset transform and apply new scale
+            self._view.resetTransform()
+            self._view.scale(factor, factor)
+            # Re-apply rotation if any
+            if self._plan_vm.rotation != 0:
+                self._view.rotate(self._plan_vm.rotation)
 
     def _on_rotation_changed(self, angle: int) -> None:
         """Handle rotation change from ViewModel.
@@ -127,6 +131,13 @@ class PlanView(QWidget):
     def fit_in_view(self) -> None:
         """Fit current scene content to view."""
         self._view.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def fit_to_window(self) -> None:
+        """Fit scene to viewport and sync zoom factor to ViewModel."""
+        self._view.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        # Sync the actual scale factor back to the ViewModel
+        scale = self._view.transform().m11()
+        self._plan_vm._zoom = scale
 
     def map_to_scene(self, view_pos: QPointF) -> QPointF:
         """Map viewport coordinates to scene coordinates.

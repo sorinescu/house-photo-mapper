@@ -58,6 +58,7 @@ def _make_page_data(
     plan_pdf_path: str,
     annotation_id: str = "ann-1",
     title: str = "Living Room",
+    page_title: str = "",
     description: str = "Main living area",
     metadata: dict | None = None,
     floor: int = 0,
@@ -75,6 +76,7 @@ def _make_page_data(
         cone_angle=60.0,
         color="#DC2828",
         title=title,
+        page_title=page_title,
         description=description,
         metadata=metadata or {
             "camera_make": "Canon",
@@ -184,24 +186,33 @@ class TestReportGeneratorService:
         assert height == pytest.approx(792.0, abs=1.0)
         doc.close()
 
-    def test_figure_numbering(
+    def test_page_header(
         self,
         sample_image: Path,
         sample_pdf: Path,
         output_pdf: Path,
     ) -> None:
-        """PDF text contains 'Figure 1', 'Figure 2' etc."""
+        """PDF text contains page title and annotation subtitle in header."""
         svc = ReportGeneratorService(project_dir=str(sample_image.parent))
         pages = [
-            _make_page_data(str(sample_image), str(sample_pdf), annotation_id="a1", title="First"),
-            _make_page_data(str(sample_image), str(sample_pdf), annotation_id="a2", title="Second"),
+            _make_page_data(
+                str(sample_image), str(sample_pdf),
+                annotation_id="a1", title="First Room", page_title="Ground Floor",
+            ),
+            _make_page_data(
+                str(sample_image), str(sample_pdf),
+                annotation_id="a2", title="Second Room", page_title="First Floor",
+            ),
         ]
         svc.generate(pages, str(output_pdf), "A4 Portrait")
 
         doc = fitz.open(str(output_pdf))
-        for i, page in enumerate(doc):
-            text = page.get_text()
-            assert f"Figure {i + 1}" in text
+        text0 = doc[0].get_text()
+        assert "Ground Floor" in text0
+        assert "First Room" in text0
+        text1 = doc[1].get_text()
+        assert "First Floor" in text1
+        assert "Second Room" in text1
         doc.close()
 
     def test_title_text_included(
@@ -220,13 +231,13 @@ class TestReportGeneratorService:
         assert "My Kitchen" in text
         doc.close()
 
-    def test_metadata_text_included(
+    def test_no_metadata_footer(
         self,
         sample_image: Path,
         sample_pdf: Path,
         output_pdf: Path,
     ) -> None:
-        """PDF text contains camera metadata."""
+        """Metadata footer is not included in the report."""
         svc = ReportGeneratorService(project_dir=str(sample_image.parent))
         metadata = {
             "camera_make": "Canon",
@@ -239,8 +250,9 @@ class TestReportGeneratorService:
 
         doc = fitz.open(str(output_pdf))
         text = doc[0].get_text()
-        assert "Canon" in text
-        assert "EOS R5" in text
+        # Metadata should not appear in the report
+        assert "Canon" not in text
+        assert "EOS R5" not in text
         doc.close()
 
     def test_empty_annotations_creates_valid_pdf(
@@ -257,4 +269,29 @@ class TestReportGeneratorService:
         # Empty list should produce 0 pages
         doc = fitz.open(str(output_pdf))
         assert len(doc) == 0
+        doc.close()
+
+    def test_unicode_text(
+        self,
+        sample_image: Path,
+        sample_pdf: Path,
+        output_pdf: Path,
+    ) -> None:
+        """PDF text supports Unicode diacritics."""
+        svc = ReportGeneratorService(project_dir=str(sample_image.parent))
+        pages = [
+            _make_page_data(
+                str(sample_image), str(sample_pdf),
+                title="Țăran Român — café résumé naïve",
+                page_title="Planurile casei",
+            ),
+        ]
+        svc.generate(pages, str(output_pdf), "A4 Portrait")
+
+        doc = fitz.open(str(output_pdf))
+        text = doc[0].get_text()
+        # Verify Unicode characters are preserved
+        assert "Țăran" in text
+        assert "café" in text
+        assert "Planurile" in text
         doc.close()

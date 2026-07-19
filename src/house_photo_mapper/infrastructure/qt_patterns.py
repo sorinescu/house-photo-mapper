@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QObject, QPoint, QPointF, QRunnable, Qt, Slot
+from PySide6.QtCore import QObject, QPoint, QPointF, QRunnable, Qt, Signal, Slot
 from PySide6.QtGui import QKeyEvent, QMouseEvent, QPainter, QWheelEvent
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
@@ -228,6 +228,8 @@ class PlanGraphicsView(QGraphicsView):
     - No scrollbars, MinimalViewportUpdate for performance
     """
 
+    project_modified = Signal()
+
     def __init__(
         self,
         scene: PlanGraphicsScene,
@@ -243,6 +245,7 @@ class PlanGraphicsView(QGraphicsView):
 
         # Annotation VM for placement
         self._annotation_vm = None
+        self._plan_vm = None
         self._pending_group = None  # AnnotationGraphicsGroup being built
         self._annotation_groups: dict[str, object] = {}  # annotation_id → group
 
@@ -291,6 +294,10 @@ class PlanGraphicsView(QGraphicsView):
             vm.annotations_changed.connect(self._on_annotations_changed)
             self.scene().selectionChanged.connect(self._on_scene_selection_changed)
 
+    def set_plan_vm(self, vm) -> None:
+        """Set PlanViewModel for zoom state sync."""
+        self._plan_vm = vm
+
     def _on_annotation_added(self, annotation_id: str) -> None:
         """Associate pending group with new annotation."""
         if self._pending_group is not None:
@@ -315,7 +322,10 @@ class PlanGraphicsView(QGraphicsView):
             if group.area is not None:
                 group.area.clear_grips()
             for item in group.all_items():
-                self.scene().removeItem(item)
+                try:
+                    self.scene().removeItem(item)
+                except RuntimeError:
+                    pass  # C++ object already deleted (e.g. scene was cleared)
 
     def _on_annotations_changed(self, annotation_ids: list) -> None:
         """Sync scene markers with ViewModel annotations (handles loaded annotations)."""
@@ -325,7 +335,16 @@ class PlanGraphicsView(QGraphicsView):
         new_ids = set(annotation_ids)
         stale_ids = [ann_id for ann_id in self._annotation_groups if ann_id not in new_ids]
         for ann_id in stale_ids:
-            self._annotation_groups.pop(ann_id, None)
+            group = self._annotation_groups.pop(ann_id, None)
+            if group is not None:
+                # Clear grips BEFORE removing items to avoid dangling C++ refs
+                if group.area is not None:
+                    group.area.clear_grips()
+                for item in group.all_items():
+                    try:
+                        self.scene().removeItem(item)
+                    except RuntimeError:
+                        pass  # C++ object already deleted (e.g. scene was cleared)
         # Create groups for new annotations
         for ann_id in annotation_ids:
             if ann_id not in self._annotation_groups:
@@ -399,12 +418,19 @@ class PlanGraphicsView(QGraphicsView):
             return
         from house_photo_mapper.presentation.graphics.annotation_items import GripItem
 
+        import sys
         selected = self.scene().selectedItems()
+        print(f"[SEL] _on_scene_selection_changed: {len(selected)} items selected, groups={len(self._annotation_groups)}", file=sys.stderr)
+        for item in selected:
+            ann_id = self._find_annotation_id_for_item(item)
+            print(f"[SEL]   item={type(item).__name__} ann_id={ann_id}", file=sys.stderr)
+
+        # Always hide all grips first
+        for group in self._annotation_groups.values():
+            group.show_area_grips(False)
+
         if not selected:
             self._annotation_vm.deselect_annotation()
-            # Hide all grips
-            for group in self._annotation_groups.values():
-                group.show_area_grips(False)
             return
 
         # Find annotation_id for selected item
@@ -419,16 +445,15 @@ class PlanGraphicsView(QGraphicsView):
                     group.show_area_grips(True)
                 return
 
-        # If nothing matched, hide grips
-        for group in self._annotation_groups.values():
-            group.show_area_grips(False)
-
     def wheelEvent(self, event: QWheelEvent) -> None:
         """Handle wheel event: Ctrl+wheel zooms, two-finger scroll pans (trackpad)."""
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             # Zoom factor 1.15 per step (smooth, not too fast)
             factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
             self.scale(factor, factor)
+            # Sync zoom factor back to ViewModel
+            if self._plan_vm is not None:
+                self._plan_vm._zoom = self.transform().m11()
             event.accept()
         elif event.pixelDelta().x() != 0 or event.pixelDelta().y() != 0:
             # Trackpad two-finger drag: pixelDelta gives smooth scroll values
@@ -442,6 +467,15 @@ class PlanGraphicsView(QGraphicsView):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """Handle mouse press: middle button starts pan, left handles tools."""
+        import sys
+        if event.button() == Qt.MouseButton.LeftButton:
+            scene_pos = self.mapToScene(event.position().toPoint())
+            items_at = self.scene().items(scene_pos)
+            print(f"[MOUSE] press at view={event.position().toPoint()} scene={scene_pos.x():.1f},{scene_pos.y():.1f} items={len(items_at)} tool={self._annotation_vm.tool_state.name if self._annotation_vm else 'None'}", file=sys.stderr)
+            for it in items_at[:3]:
+                ann_id = self._find_annotation_id_for_item(it)
+                print(f"[MOUSE]   item={type(it).__name__} ann_id={ann_id} selectable={it.flags() & it.GraphicsItemFlag.ItemIsSelectable}", file=sys.stderr)
+
         if event.button() == Qt.MouseButton.MiddleButton:
             self._pan_active = True
             self._pan_start = event.position()
@@ -457,8 +491,7 @@ class PlanGraphicsView(QGraphicsView):
                 self._handle_cone_press(event)
                 return
             elif self._annotation_vm.tool_state == ToolState.SELECT:
-                if self._handle_group_drag_press(event):
-                    return
+                self._handle_group_drag_press(event)
                 super().mousePressEvent(event)
             else:
                 super().mousePressEvent(event)
@@ -573,29 +606,37 @@ class PlanGraphicsView(QGraphicsView):
         return None
 
     def _handle_group_drag_press(self, event: QMouseEvent) -> bool:
-        """Start group drag if click is on an annotation item. Returns True if handled."""
-        from house_photo_mapper.presentation.graphics.annotation_items import GripItem
+        """Set up group drag if click is on an annotation item. Returns True if drag started.
+
+        Does NOT accept the event — the scene must still process it for selection.
+
+        When clicking on the marker itself, returns False to let the marker's
+        native Qt ItemIsMovable handle it independently.
+        """
+        from house_photo_mapper.presentation.graphics.annotation_items import (
+            CameraMarkerItem,
+            GripItem,
+        )
 
         scene_pos = self.mapToScene(event.position().toPoint())
-        items_at = self.items(scene_pos.toPoint())
+        items_at = self.scene().items(scene_pos)
 
         for item in items_at:
             if isinstance(item, GripItem):
-                # Let grip handle its own drag
+                return False
+            # Let marker move independently — don't start group drag
+            if isinstance(item, CameraMarkerItem):
                 return False
             ann_id = self._find_annotation_id_for_item(item)
             if ann_id is not None:
+                group = self._annotation_groups[ann_id]
                 self._group_drag_active = True
                 self._group_drag_annotation_id = ann_id
                 self._group_drag_start_pos = scene_pos
-                # Store initial positions of all items in this annotation
-                group = self._annotation_groups[ann_id]
                 self._group_drag_item_positions = {
                     type(it).__name__: it.pos() for it in group.all_items()
                 }
-                # Also store area position separately for bounds tracking
                 self._group_drag_area_start_pos = group.area.pos() if group.area else QPointF()
-                event.accept()
                 return True
 
         return False
@@ -607,6 +648,7 @@ class PlanGraphicsView(QGraphicsView):
             ann = self._annotation_vm.get_annotation(group.annotation_id)
             if ann is not None and group.area is not None:
                 ann.visible_area = [group.area.get_rect_data()]
+                self.project_modified.emit()
 
     def _on_marker_drag_finished(self, annotation_id: str, x: float, y: float) -> None:
         """Sync model after Qt-native marker drag (ItemIsMovable path)."""
@@ -616,6 +658,7 @@ class PlanGraphicsView(QGraphicsView):
         if ann is not None:
             ann.position_x = x
             ann.position_y = y
+            self.project_modified.emit()
 
     def _on_area_body_clicked(self, group, scene_pos: QPointF) -> None:
         """Start group drag when area body is clicked (called from area's mousePressEvent)."""
@@ -727,6 +770,7 @@ class PlanGraphicsView(QGraphicsView):
                     ann.direction_angle = group.cone.angle
             self._cone_drag_active = False
             self._cone_drag_annotation_id = None
+            self.project_modified.emit()
             event.accept()
         elif self._group_drag_active:
             # Sync position and visible_area to model
@@ -745,6 +789,7 @@ class PlanGraphicsView(QGraphicsView):
             self._group_drag_active = False
             self._group_drag_annotation_id = None
             self._group_drag_item_positions = {}
+            self.project_modified.emit()
             event.accept()
         else:
             super().mouseReleaseEvent(event)

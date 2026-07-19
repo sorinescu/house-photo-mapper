@@ -90,6 +90,7 @@ class PersistenceService:
 
         project.mark_clean()
         self._add_recent_project(str(path))
+        self.set_last_opened_project(str(path))
 
     def load_project(self, path: str) -> ProjectModel:
         """Load and validate project from file with schema version checking.
@@ -131,6 +132,7 @@ class PersistenceService:
         project.path = path
         project.mark_clean()
         self._add_recent_project(path)
+        self.set_last_opened_project(path)
 
         # Log data integrity warnings
         warnings = self._validate_project_data(project)
@@ -421,3 +423,19 @@ class PersistenceService:
             seconds: Interval in seconds (minimum 5).
         """
         self._settings.setValue("autoSave/intervalSeconds", max(5, seconds))
+
+    def get_last_opened_project(self) -> str | None:
+        """Get the path of the last opened project, or None."""
+        value: Any = self._settings.value("lastOpenedProject", "", type=str)
+        logger.debug("get_last_opened_project: raw=%r, result=%r", value, value if value else None)
+        return value if value else None
+
+    def set_last_opened_project(self, path: str) -> None:
+        """Store the path of the last opened project.
+
+        Args:
+            path: Absolute path to the project file.
+        """
+        logger.debug("set_last_opened_project: %s", path)
+        self._settings.setValue("lastOpenedProject", path)
+        self._settings.sync()

@@ -42,6 +42,9 @@ def main() -> NoReturn:
     window = MainWindow(vm, persistence)
     window.show()
 
+    # Reopen last project after the window is shown and fully laid out
+    vm.reopen_last_project()
+
     sys.exit(app.exec())
 
 
