@@ -424,6 +424,40 @@ class PersistenceService:
         """
         self._settings.setValue("autoSave/intervalSeconds", max(5, seconds))
 
+    def load_report_layout_format(self) -> str:
+        """Get the report page format preference.
+
+        Returns:
+            "A4" or "US Letter" (default: "A4").
+        """
+        value: Any = self._settings.value("reportLayout/format", "A4", type=str)
+        return str(value) if value else "A4"
+
+    def save_report_layout_format(self, fmt: str) -> None:
+        """Set the report page format preference.
+
+        Args:
+            fmt: "A4" or "US Letter".
+        """
+        self._settings.setValue("reportLayout/format", fmt)
+
+    def load_report_layout_orientation(self) -> str:
+        """Get the report orientation preference.
+
+        Returns:
+            "Portrait" or "Landscape" (default: "Portrait").
+        """
+        value: Any = self._settings.value("reportLayout/orientation", "Portrait", type=str)
+        return str(value) if value else "Portrait"
+
+    def save_report_layout_orientation(self, orientation: str) -> None:
+        """Set the report orientation preference.
+
+        Args:
+            orientation: "Portrait" or "Landscape".
+        """
+        self._settings.setValue("reportLayout/orientation", orientation)
+
     def load_report_color_mode(self) -> str:
         """Get the report color mode preference.
 

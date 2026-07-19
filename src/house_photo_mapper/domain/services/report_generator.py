@@ -217,14 +217,18 @@ class ReportGeneratorService:
                 plan_area_height=plan_height,
             )
             plan_img = ImageReader(io.BytesIO(plan_result.image_bytes))
-            plan_left = margin
-            plan_bottom = plan_top - plan_height
+            img_w, img_h = plan_img.getSize()
+            draw_scale = min(plan_width / img_w, plan_height / img_h)
+            actual_w = img_w * draw_scale
+            actual_h = img_h * draw_scale
+            plan_left = margin + (plan_width - actual_w) / 2
+            plan_bottom = plan_top - actual_h
             c.drawImage(
                 plan_img,
                 plan_left,
                 plan_bottom,
-                width=plan_width,
-                height=plan_height,
+                width=actual_w,
+                height=actual_h,
                 preserveAspectRatio=True,
                 anchor="nw",
             )
@@ -235,7 +239,7 @@ class ReportGeneratorService:
 
             # Convert to PDF canvas coordinates (Y is flipped)
             canvas_x = plan_left + anno_x_in_plan
-            canvas_y = plan_bottom + plan_height - anno_y_in_plan
+            canvas_y = plan_bottom + actual_h - anno_y_in_plan
 
             # Parse base color
             base_color = page_data.color[:7] if len(page_data.color) > 7 else page_data.color
@@ -287,7 +291,7 @@ class ReportGeneratorService:
                 if len(rect_data) >= 4:
                     rx, ry, rw, rh = rect_data[0], rect_data[1], rect_data[2], rect_data[3]
                     rect_x = plan_left + (rx - plan_result.offset_x) * plan_result.scale_x
-                    rect_y = plan_bottom + plan_height - ((ry - plan_result.offset_y) * plan_result.scale_y) - rh * plan_result.scale_y
+                    rect_y = plan_bottom + actual_h - ((ry - plan_result.offset_y) * plan_result.scale_y) - rh * plan_result.scale_y
                     rect_w = rw * plan_result.scale_x
                     rect_h = rh * plan_result.scale_y
 
