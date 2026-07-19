@@ -25,7 +25,7 @@ progress:
 - **Phase**: 7 of 7 — Polish, Packaging & Ship
 - **Plan**: 0 of 5 — Phase 7 not started
 - **Status**: Phase 6 complete, ready for Phase 7
-- **Last Activity**: Phase 6 complete — all 3 plans executed
+- **Last Activity**: Quick task 260719-lpc — report color config dialog added
 - **Progress**: 90% (35/39 plans completed)
 
 ```
@@ -71,8 +71,14 @@ Progress: [██████████████████░░] 90%
 - **Phase 4**: Photo memory explosion at 1000+ high-res — tile-based lazy loading + `setScaledSize()` required (PITFALLS.md #4)
 - **Phase 6**: ReportLab O(n²) slowdown on multi-page reports — small tables per photo, pre-calc heights, background pool (PITFALLS.md #2)
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260719-lpc | Add report configuration dialog for annotation colors | 2026-07-19 | 6632bcf | [260719-lpc-add-a-report-configuration-dialog-where-](./quick/260719-lpc-add-a-report-configuration-dialog-where-/) |
+
 ## Session Continuity
 
-- **Last Session**: 2026-07-15 (Phase 6 execution)
-- **Stopped At**: Phase 6 complete, ready for Phase 7
+- **Last Session**: 2026-07-19 (Quick task: report color config)
+- **Stopped At**: Quick task complete, Phase 7 still pending
 - **Resume File**: None
