@@ -25,6 +25,7 @@ from house_photo_mapper.infrastructure.logging import get_logger
 from house_photo_mapper.infrastructure.theme import ThemeManager, ThemeMode
 from house_photo_mapper.domain.services.report_generator import ReportGeneratorService, ReportPageData
 from house_photo_mapper.presentation.views.layout_dialog import LayoutDialog
+from house_photo_mapper.presentation.views.report_color_dialog import ReportColorDialog
 from house_photo_mapper.presentation.views.report_progress import ReportProgressDialog
 from house_photo_mapper.presentation.viewmodels.annotation_vm import AnnotationViewModel
 from house_photo_mapper.presentation.viewmodels.main_window_vm import MainWindowViewModel
@@ -1070,6 +1071,24 @@ class MainWindow(QMainWindow):
         format_str, orientation_str = dialog.get_selected_layout()
         page_size = dialog.get_page_size_string()
 
+        # Show ReportColorDialog to get color preferences
+        color_mode = self._persistence.load_report_color_mode()
+        color_override = self._persistence.load_report_color_override()
+        color_dialog = ReportColorDialog(
+            current_mode=color_mode,
+            current_color=color_override,
+            parent=self,
+        )
+        if color_dialog.exec() != ReportColorDialog.DialogCode.Accepted:
+            return
+
+        # Save color preferences
+        self._persistence.save_report_color_mode(color_dialog.get_selected_mode())
+        self._persistence.save_report_color_override(color_dialog.get_selected_color())
+
+        use_override = color_dialog.get_selected_mode() == "override"
+        override_color = color_dialog.get_selected_color()
+
         # Get project directory for resolving relative paths
         # project.path is the .hpm file path; parent is the project directory
         project_dir = str(Path(self._vm.project.path).parent) if self._vm.project and self._vm.project.path else ""
@@ -1167,7 +1186,7 @@ class MainWindow(QMainWindow):
                     plan_pixels_per_meter=pixels_per_meter,
                     direction_angle=ann.direction_angle,
                     cone_angle=ann.cone_angle,
-                    color=ann.color,
+                    color=override_color if use_override else ann.color,
                     title=ann.title or "Untitled",
                     page_title=page_title,
                     description=ann.description,
