@@ -424,6 +424,40 @@ class PersistenceService:
         """
         self._settings.setValue("autoSave/intervalSeconds", max(5, seconds))
 
+    def load_report_color_mode(self) -> str:
+        """Get the report color mode preference.
+
+        Returns:
+            "original" or "override" (default: "original").
+        """
+        value: Any = self._settings.value("reportColor/mode", "original", type=str)
+        return str(value) if value else "original"
+
+    def save_report_color_mode(self, mode: str) -> None:
+        """Set the report color mode preference.
+
+        Args:
+            mode: "original" or "override".
+        """
+        self._settings.setValue("reportColor/mode", mode)
+
+    def load_report_color_override(self) -> str:
+        """Get the report color override hex string.
+
+        Returns:
+            Hex color string like "#DC2828" (default: "#DC2828").
+        """
+        value: Any = self._settings.value("reportColor/override", "#DC2828", type=str)
+        return str(value) if value else "#DC2828"
+
+    def save_report_color_override(self, color: str) -> None:
+        """Set the report color override hex string.
+
+        Args:
+            color: Hex color string like "#FF0000".
+        """
+        self._settings.setValue("reportColor/override", color)
+
     def get_last_opened_project(self) -> str | None:
         """Get the path of the last opened project, or None."""
         value: Any = self._settings.value("lastOpenedProject", "", type=str)
