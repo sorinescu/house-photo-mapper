@@ -76,4 +76,4 @@ src/house_photo_mapper/
 
 ## License
 
-Proprietary — All rights reserved.
+MIT.
